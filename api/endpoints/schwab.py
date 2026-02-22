@@ -98,10 +98,24 @@ async def auth_callback(received_url: str):
 
     auth_context = _pending_auth_context
 
+    import base64
+    import json
+
+    token_data = {}
+
     def write_token(token):
-        import json
-        TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-        TOKEN_PATH.write_text(json.dumps(token))
+        nonlocal token_data
+        token_data = token
+        # Always write to /tmp which is guaranteed writable
+        tmp_path = Path("/tmp/schwab_tokens.json")
+        tmp_path.write_text(json.dumps(token))
+        # Also try the configured path (volume, etc.) but don't crash if it fails
+        if TOKEN_PATH != tmp_path:
+            try:
+                TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+                TOKEN_PATH.write_text(json.dumps(token))
+            except OSError:
+                pass
 
     try:
         schwab.auth.client_from_received_url(
@@ -114,10 +128,18 @@ async def auth_callback(received_url: str):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {exc}") from exc
 
+    # Encode token as base64 so user can persist it as SCHWAB_TOKEN_B64 env var
+    token_b64 = base64.b64encode(json.dumps(token_data).encode()).decode()
+
     # Clear pending context and reset client singleton
     _pending_auth_context = None
     schwab_client.reset_client()
-    return {"status": "tokens saved", "token_file": str(TOKEN_PATH)}
+    return {
+        "status": "tokens saved",
+        "token_file": str(TOKEN_PATH),
+        "schwab_token_b64": token_b64,
+        "next_step": "Copy schwab_token_b64 and set it as SCHWAB_TOKEN_B64 in Railway variables to persist across restarts.",
+    }
 
 
 @router.get("/auth/status")
