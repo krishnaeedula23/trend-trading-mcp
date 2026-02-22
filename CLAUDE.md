@@ -1,41 +1,83 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with the MaverickMCP codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with the MaverickMCP + Saty Trading System codebase.
 
-**🚀 QUICK START**: Run `make dev` to start the server. Connect with Claude Desktop using `mcp-remote`. See "Claude Desktop Setup" section below.
+**🚀 QUICK START (Maverick MCP)**: Run `make dev` to start the MCP server. Connect with Claude Desktop using `mcp-remote`. See "Claude Desktop Setup" section below.
+
+**🚀 QUICK START (Saty API)**: Run `venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload` to start the Saty indicator REST API. See "Saty Trading System" section below.
 
 ## Project Overview
 
-MaverickMCP is a personal stock analysis MCP server built for Claude Desktop. It provides:
+This repository contains **two complementary trading systems** that can be used independently or combined:
+
+### System 1: MaverickMCP (Claude Desktop MCP Server)
+
+A personal stock analysis MCP server for Claude Desktop:
 
 - Pre-seeded database with all 520 S&P 500 stocks and screening recommendations
 - Real-time and historical stock data access with intelligent caching
 - Advanced technical analysis tools (RSI, MACD, Bollinger Bands, etc.)
 - Multiple stock screening strategies (Maverick Bullish/Bearish, Supply/Demand Breakouts)
-- **Personal portfolio tracking with cost basis averaging and live P&L** (NEW)
+- **Personal portfolio tracking with cost basis averaging and live P&L**
 - Portfolio optimization and correlation analysis with auto-detection
 - Market and macroeconomic data integration
 - SQLAlchemy-based database integration with SQLite default (PostgreSQL optional)
 - Redis caching for high performance (optional)
 - Clean, personal-use architecture without authentication complexity
 
+### System 2: Saty Trading System (FastAPI REST Server)
+
+An exact Python port of the Saty Trading System Pine Scripts, exposing indicators as a REST API:
+
+- **Saty ATR Levels**: Dynamic support/resistance map anchored to Previous Day Close (PDC) with Fibonacci multiples of ATR
+- **Saty Pivot Ribbon Pro**: EMA 8/13/21/48/200 trend engine with 4-color bias candle logic and compression detection
+- **Saty Phase Oscillator**: ATR-normalized momentum oscillator with zone classification and cross signals
+- **Price Structure Levels**: PDH/PDL/PMH/PML structural bias for every session
+- **Green Flag Checklist**: A+/A/B/skip trade grading (9 setups × 10 confirmation flags)
+- Deployed separately on Railway; no Tiingo/Redis/PostgreSQL dependency
+
+### Integration Vision
+
+Use the systems together for a complete trading workflow:
+```
+Maverick (WHAT to trade)  →  Saty (WHEN to trade it)
+Screening + macro context  →  Indicator timing + entry grading
+```
+
 ## Project Structure
 
-- `maverick_mcp/`
-  - `api/`: MCP server implementation
-    - `server.py`: Main FastMCP server (simple stock analysis mode)
-    - `routers/`: Domain-specific routers for organized tool groups
-  - `config/`: Configuration and settings
-  - `core/`: Core financial analysis functions
-  - `data/`: Data handling, caching, and database models
-  - `providers/`: Stock, market, and macro data providers
-  - `utils/`: Development utilities and performance optimizations
-  - `tests/`: Comprehensive test suite
-  - `validation/`: Request/response validation
-- `tools/`: Development tools for faster workflows
-- `docs/`: Architecture documentation
+### Maverick MCP (`maverick_mcp/`)
+- `api/`: MCP server implementation
+  - `server.py`: Main FastMCP server (simple stock analysis mode)
+  - `routers/`: Domain-specific routers for organized tool groups
+- `config/`: Configuration and settings
+- `core/`: Core financial analysis functions
+- `data/`: Data handling, caching, and database models
+- `providers/`: Stock, market, and macro data providers
+- `utils/`: Development utilities and performance optimizations
+- `validation/`: Request/response validation
+
+### Saty Trading System (`api/`)
+- `main.py`: FastAPI app with CORS, mounts all routers
+- `endpoints/`
+  - `satyland.py`: `/api/satyland/*` — ATR Levels, Pivot Ribbon, Phase Oscillator, Trade Plan, Price Structure
+  - `schwab.py`: `/api/schwab/*` — Schwab OAuth2 + real-time quotes + options chain
+  - `options.py`: `/api/options/*` — ATM straddle, gamma exposure (GEX)
+- `indicators/satyland/`
+  - `atr_levels.py`: Wilder ATR14 + PDC-anchored Fibonacci levels (exact Pine Script port)
+  - `pivot_ribbon.py`: EMA 8/13/21/48/200 + compression tracker (exact Pine Script port)
+  - `phase_oscillator.py`: ATR-normalized oscillator + zone crosses (exact Pine Script port)
+  - `green_flag.py`: A+/A/B/skip trade confirmation checklist
+  - `price_structure.py`: PDH/PDL/PMH/PML structural bias
+- `integrations/schwab/`: SchwabClient + OAuth2 token refresh
+- `tests/satyland/`: 115 tests, no external dependencies — `venv/bin/pytest tests/satyland/`
+
+### Shared
+- `tests/`: Maverick test suite (requires postgres/redis containers)
+- `docs/`: Architecture docs + **`saty_trading_skill.md`** (full Saty system reference)
+- `docs/*.txt`: Pine Script source files used as ground truth for Python ports
 - `scripts/`: Startup and utility scripts
-- `Makefile`: Central command interface
+- `Makefile`: Central command interface for Maverick
 
 ## Environment Setup
 
@@ -99,7 +141,28 @@ MaverickMCP is a personal stock analysis MCP server built for Claude Desktop. It
 
 ## Quick Start Commands
 
-### Essential Commands (Powered by Makefile)
+### Saty API Server
+
+```bash
+# Start Saty REST API (port 8080)
+venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload
+
+# Run Saty test suite (no containers needed)
+venv/bin/pytest tests/satyland/ -v
+
+# Quick smoke test (server must be running)
+curl -s -X POST http://localhost:8080/api/satyland/calculate \
+  -H "Content-Type: application/json" \
+  -d '{"ticker":"SPY","timeframe":"5m"}' | python3 -m json.tool
+
+# Full trade plan with Green Flag grade
+curl -s -X POST http://localhost:8080/api/satyland/trade-plan \
+  -H "Content-Type: application/json" \
+  -d '{"ticker":"SPY","timeframe":"5m","direction":"bullish","vix":15.2}' \
+  | python3 -m json.tool | grep grade
+```
+
+### Maverick MCP Commands (Powered by Makefile)
 
 ```bash
 # Start the MCP server
@@ -489,12 +552,253 @@ All tools are organized into logical groups (39+ tools total):
 - `get_market_overview` - Indices, sectors, market breadth
 - `get_watchlist` - Sample portfolio with real-time data
 
-## Development Commands
+## Saty Trading System
 
-### Running the Server
+> **Full reference**: `docs/saty_trading_skill.md`
+> **Pine Script ground truth**: `docs/saty_atr_levels_pine_script.txt`, `docs/pivot_ribbon_pine_script.txt`, `docs/phase_oscillator_pine_script.txt`
+
+### Philosophy
+
+The Saty system answers four questions before every trade:
+
+1. **What is the trend?** → Pivot Ribbon Pro (EMA stack)
+2. **Where are the key levels?** → ATR Levels + Price Structure (PDH/PDL/PMH/PML)
+3. **Is there momentum to act?** → Phase Oscillator
+4. **Is price in bullish/bearish structural context?** → Position vs PDH/PDL/PMH/PML
+
+**Core discipline**: Never trade the first 10 minutes (9:30–9:40 ET). Never chase breakouts — wait for Blue/Orange bias candles on pullbacks. Verbal Audit before every entry (Setup → Trigger → Entry → Exit → Stop).
+
+### Indicator 1: Saty ATR Levels (`atr_levels.py`)
+
+**What it computes** (matching Pine Script exactly):
+
+| Output key | Description |
+|---|---|
+| `pdc` | Previous Day Close = Zero Line / central pivot |
+| `atr` | Wilder ATR14 from the *previous settled bar* (Pine: `ta.atr(14)[1]`) |
+| `call_trigger` | PDC + 0.236×ATR — bullish GO signal (cyan) |
+| `put_trigger` | PDC − 0.236×ATR — bearish GO signal (orange) |
+| `levels` | Full dict: trigger, golden_gate, mid_50, mid_range, fib_786, full_range × bull/bear |
+| `atr_covered_pct` | `(today_H − today_L) / ATR × 100` — how much of today's range is used |
+| `atr_status` | `green` ≤70%, `orange` 70–90%, `red` ≥90% (room to run assessment) |
+| `atr_room_ok` | `True` when status=green |
+| `trigger_box` | `{inside: bool}` — True when price is between put/call trigger (Chopzilla zone) |
+| `price_position` | Enum: `above_full_range` / `above_mid_range` / `inside_trigger_box` / etc. |
+| `trend` | EMA 8/21/34 stack: `bullish` / `bearish` / `neutral` |
+| `call_trigger` / `put_trigger` | Top-level aliases to `levels.trigger_bull/bear.price` |
+
+**Critical implementation detail**: ATR and PDC come from `iloc[-2]` (previous settled bar), not the forming bar. Levels never move intraday — only the current_price changes.
+
+**Endpoint**: `POST /api/satyland/calculate` — returns ATR Levels + Pivot Ribbon + Phase Oscillator together.
+
+### Indicator 2: Saty Pivot Ribbon Pro (`pivot_ribbon.py`)
+
+**What it computes**:
+
+| EMA | Role |
+|---|---|
+| 8 | Fast / Momentum |
+| 13 | Conviction crossover signal |
+| 21 | **THE PIVOT CENTER** — key mean-reversion anchor |
+| 48 | **Bias EMA** — above = bullish regime, below = bearish regime |
+| 200 | Macro trend filter |
+
+**Key output keys**:
+
+| Key | Description |
+|---|---|
+| `ribbon_state` | `bullish` (8>21>48), `bearish` (8<21<48), `chopzilla` (mixed) |
+| `bias_candle` | `green` (up+above48), `blue` (down+above48=BUY PULLBACK), `orange` (up+below48=SHORT), `red` (down+below48), `gray` (compression) |
+| `in_compression` | Bool — uses 2.0×ATR14 threshold formula (NOT LazyBear BB-inside-KC) |
+| `conviction_arrow` | `bullish_crossover` / `bearish_crossover` / None (EMA13 × EMA48) |
+| `above_200ema` | Bool — macro regime filter |
+| `chopzilla` | Bool — alias for `ribbon_state == "chopzilla"` |
+
+**Entry rule**: Wait for `bias_candle = "blue"` (bullish pullback) or `bias_candle = "orange"` (bearish pullback). Never enter on green or red (trend candles — too late).
+
+### Indicator 3: Saty Phase Oscillator (`phase_oscillator.py`)
+
+**Formula** (exact Pine Script port):
+```
+raw_signal  = ((close − EMA21) / (3.0 × ATR14)) × 100
+oscillator  = EMA3(raw_signal)          # alpha = 2/(3+1) = 0.5
+```
+
+**Key output keys**:
+
+| Key | Description |
+|---|---|
+| `oscillator` | Current value (typically ±150 range in trending markets) |
+| `oscillator_prev` | Previous bar value (for crossover detection) |
+| `phase` | `green` (osc≥0), `red` (osc<0), `compression` (in_compression=True) |
+| `in_compression` | Bool — same formula as Pivot Ribbon compression tracker |
+| `current_zone` | `extreme_up/down` (±100), `distribution/accumulation` (±61.8), `neutral_up/down` (±23.6), `above/below_zero` |
+| `zone_crosses` | `leaving_accumulation/extreme_down/distribution/extreme_up` — mean reversion signals |
+
+**Note on phase strings**: phase is `"green"` / `"red"` / `"compression"` — NOT `"firing_up"` / `"firing_down"` (old Pine Script terminology).
+
+### Price Structure Levels (`price_structure.py`)
+
+Mark before the open, every day:
+
+| Level | Meaning | Bullish trigger |
+|---|---|---|
+| PDH | Previous Day High | Price above PDH = strongly bullish structural bias |
+| PDL | Previous Day Low | Price below PDL = strongly bearish structural bias |
+| PMH | Pre-Market High | Price above PMH = intraday bullish bias |
+| PML | Pre-Market Low | Price below PML = intraday bearish bias |
+
+**Highest conviction**: When an ATR trigger level clusters within 0.5% of PDH/PDL/PMH/PML → confluence zone. Green Flag gives +1 bonus for this.
+
+### Green Flag Checklist (`green_flag.py`)
+
+Grades a trade setup A+/A/B/skip based on 10 confirmation flags:
+
+| Flag | Bullish check | Bearish check |
+|---|---|---|
+| `trend_ribbon_stacked` | ribbon_state == "bullish" | ribbon_state == "bearish" |
+| `price_above/below_cloud` | current_price > EMA48 | current_price < EMA48 |
+| `trigger_hit` | price ≥ call_trigger | price ≤ put_trigger |
+| `structure_confirmed` | price above PDH or PMH | price below PDL or PML |
+| `mtf_aligned` | above_200ema = True | above_200ema = False |
+| `momentum_confirmed` | phase == "green" | phase == "red" |
+| `squeeze` | in_compression = True | in_compression = True |
+| `atr_room_ok` | atr_status == "green" | atr_status == "green" |
+| `vix_bias` | vix < 17 | vix > 20 |
+| `confluence_bonus` | trigger within 0.5% of PDH | trigger within 0.5% of PDL |
+
+| Score | Grade | Recommendation |
+|---|---|---|
+| ≥5 | A+ | Full size per Rule of 10 |
+| 4 | A | Standard size |
+| 3 | B | Reduce size / wait for one more |
+| <3 | skip | Do not force the trade |
+
+**Endpoint**: `POST /api/satyland/trade-plan` — returns all indicators + price structure + Green Flag grade.
+
+### The Nine A+ Setups (Brief Reference)
+
+Full setup documentation in `docs/saty_trading_skill.md`.
+
+| # | Setup | Key Condition |
+|---|---|---|
+| 1 | Trend Continuation (Ribbon Retest) | Blue/Orange candle pulls back to 13/21 EMA in stacked ribbon |
+| 2 | Golden Gate | Price breaks ±38.2% with conviction; target ±61.8% (60% hit rate) |
+| 3 | Vomy (Bearish Reversal) | 5-stage: Fins → Sickness → Vomit → Trigger → Target |
+| 4 | iVomy (Bullish Reversal) | Mirror of Vomy |
+| 5 | Squeeze | Phase Oscillator compression fires; direction from ribbon orientation |
+| 6 | ORB (10-min Open Range Breakout) | Candle close outside 9:30–9:40 range; retest preferred |
+| 7 | Divergence from Extreme | Price new HOD/LOD, oscillator does not confirm |
+| 8 | 1-min EOD Divergence (0DTE) | 2:00–3:45 PM ET; phase oscillator reversal at extreme |
+| 9 | Dip Connoisseur | Gap into demand zone at −1 ATR; ribbon stabilizing |
+| B | NASA (IV Flush) | Post-earnings IV crush; buy deflated premiums |
+
+### Valhalla Exit Framework
+
+Scale at **Mid-Range (+61.8%)**: sell 70%, move stop to breakeven on 30% runners. Exit runners at Full Range (+100%) or Ribbon fold. Extension levels beyond 100% = Valhalla territory (runners only).
+
+### Saty API Endpoints
+
+```
+POST /api/satyland/calculate       → ATR Levels + Pivot Ribbon + Phase Oscillator
+POST /api/satyland/trade-plan      → Above + Price Structure + Green Flag (A+/A/B/skip)
+POST /api/satyland/price-structure → PDH/PDL/PMH/PML only
+POST /api/schwab/quote             → Real-time quote via Schwab
+POST /api/schwab/options-chain     → Full options chain via Schwab
+POST /api/options/atm-straddle     → ATM straddle + expected move
+POST /api/options/gamma-exposure   → GEX by strike
+GET  /api/schwab/auth/url          → Start OAuth2 flow
+POST /api/schwab/auth/callback     → Complete OAuth2 flow
+```
+
+Request body for `/calculate` and `/trade-plan`:
+```json
+{
+  "ticker": "SPY",
+  "timeframe": "5m",        // 1m | 5m | 15m | 1h | 4h | 1d | 1w
+  "direction": "bullish",   // trade-plan only: "bullish" | "bearish"
+  "vix": 15.2,              // trade-plan only: optional VIX level
+  "atr_period": 14,         // default 14
+  "include_extensions": false  // include Valhalla levels beyond 100%
+}
+```
+
+### Saty Testing
 
 ```bash
-# Development mode (recommended - Makefile commands)
+# Run full test suite (115 tests, no containers needed, ~0.5s)
+venv/bin/pytest tests/satyland/ -v
+
+# Run by category
+venv/bin/pytest tests/satyland/test_atr_levels.py -v       # ATR math
+venv/bin/pytest tests/satyland/test_pivot_ribbon.py -v     # Ribbon + bias candle
+venv/bin/pytest tests/satyland/test_phase_oscillator.py -v # Phase oscillator formula
+venv/bin/pytest tests/satyland/test_green_flag.py -v       # Green flag + bug regressions
+venv/bin/pytest tests/satyland/test_behavioral.py -v       # Pine Script invariants
+venv/bin/pytest tests/satyland/test_endpoints.py -v        # FastAPI endpoints (mocked yfinance)
+```
+
+### Saty Environment Variables
+
+```
+# Schwab integration (required for real-time data)
+SCHWAB_CLIENT_ID=
+SCHWAB_CLIENT_SECRET=
+SCHWAB_REDIRECT_URI=https://127.0.0.1
+SCHWAB_TOKEN_FILE=/tmp/schwab_tokens.json
+
+# CORS (use * for local development)
+ALLOWED_ORIGINS=*
+```
+
+No Tiingo API key needed — Saty uses `yfinance` for historical data.
+
+---
+
+## Integration Architecture: Maverick + Saty
+
+The two systems are designed to complement each other at different stages of the trading workflow:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MAVERICK MCP (Strategic Layer)              │
+│                                                         │
+│  • Screen 520 S&P 500 stocks for Maverick Bullish/Bear  │
+│  • Supply/demand breakout candidates                    │
+│  • Fundamental + macroeconomic context (FRED API)       │
+│  • Portfolio P&L and position management                │
+│  • AI research (OpenRouter 400+ models)                 │
+└──────────────────────┬──────────────────────────────────┘
+                       │ "These are the candidates"
+                       ↓
+┌─────────────────────────────────────────────────────────┐
+│               SATY API (Tactical Layer)                  │
+│                                                         │
+│  • Is the ribbon stacked? (trend confirmation)          │
+│  • Has the trigger been hit? (±23.6% ATR)              │
+│  • Is structure cleared? (PDH/PDL/PMH/PML)             │
+│  • Is momentum firing? (Phase Oscillator green/red)     │
+│  • Grade: A+ (full size) / A / B / skip                │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Planned combined workflows**:
+
+1. **Screening → Timing**: Maverick finds high-momentum S&P 500 stocks → Saty `/trade-plan` grades each candidate for same-day entry
+2. **Portfolio → Position Sizing**: Maverick portfolio P&L → Saty Green Flag score → position size via Rule of 10
+3. **Macro → Bias**: Maverick FRED macro data + VIX → Saty VIX bias filter → directional bias for session
+4. **Backtesting Saty Setups**: Feed Maverick VectorBT engine with Saty indicator signals to backtest the 9 setups historically
+
+**Independent operation**: Each system is fully self-contained. Maverick runs on port 8003 (MCP/SSE). Saty runs on port 8080 (REST). Neither requires the other to be running.
+
+---
+
+## Development Commands
+
+### Running the Servers
+
+```bash
+# ── Maverick MCP Server (port 8003) ──────────────────────────────────────────
 make dev                    # SSE transport (default, recommended for Claude Desktop)
 make dev-http               # Streamable-HTTP transport (for testing with curl/Postman)
 make dev-stdio              # STDIO transport (direct connection)
@@ -504,12 +808,15 @@ uv run python -m maverick_mcp.api.server --transport sse --port 8003
 uv run python -m maverick_mcp.api.server --transport streamable-http --port 8003
 uv run python -m maverick_mcp.api.server --transport stdio
 
-# Script-based startup (with environment variable)
-./scripts/dev.sh                        # Defaults to SSE
-MAVERICK_TRANSPORT=streamable-http ./scripts/dev.sh
+# ── Saty API Server (port 8080) ───────────────────────────────────────────────
+venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload
+
+# ── Run both simultaneously ───────────────────────────────────────────────────
+make dev &   # Maverick on 8003 (background)
+venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload  # Saty on 8080
 ```
 
-**When to use each transport:**
+**When to use each Maverick transport:**
 - **SSE** (`make dev` or `make dev-sse`): Best for Claude Desktop - tested and stable
 - **Streamable-HTTP** (`make dev-http`): Ideal for testing with curl/Postman, debugging transport issues
 - **STDIO** (`make dev-stdio`): Direct connection without network layer, good for development
@@ -517,12 +824,17 @@ MAVERICK_TRANSPORT=streamable-http ./scripts/dev.sh
 ### Testing
 
 ```bash
-# Quick testing
+# ── Saty tests (no containers, fast ~0.5s) ────────────────────────────────────
+venv/bin/pytest tests/satyland/ -v                    # All 115 satyland tests
+venv/bin/pytest tests/satyland/test_green_flag.py -v  # Bug regressions + grading
+venv/bin/pytest tests/satyland/test_endpoints.py -v   # API endpoint tests
+
+# ── Maverick tests ────────────────────────────────────────────────────────────
 make test                  # Unit tests only (5-10 seconds)
 make test-specific TEST=test_name  # Run specific test
 make test-watch           # Auto-run on changes
 
-# Using uv (recommended)
+# Using uv (recommended for Maverick)
 uv run pytest                    # Manual pytest execution
 uv run pytest --cov=maverick_mcp # With coverage
 uv run pytest -m integration    # Integration tests (requires PostgreSQL/Redis)
@@ -532,6 +844,8 @@ pytest                    # Manual pytest execution
 pytest --cov=maverick_mcp # With coverage
 pytest -m integration    # Integration tests (requires PostgreSQL/Redis)
 ```
+
+**Note on test isolation**: Saty tests in `tests/satyland/` run independently without testcontainers, PostgreSQL, or Redis. Maverick integration tests require containers. The root `tests/conftest.py` is guarded so Saty tests can always run.
 
 ### Code Quality
 
@@ -607,7 +921,7 @@ make redis-start
 - Comprehensive error handling
 - Performance-first design with caching
 
-### Financial Analysis
+### Financial Analysis (Maverick)
 
 - Use pandas_ta for technical indicators
 - Document all financial calculations
@@ -615,7 +929,7 @@ make redis-start
 - Cache expensive computations
 - Use vectorized operations for performance
 
-### MCP Integration
+### MCP Integration (Maverick)
 
 - Register tools with `@mcp.tool()` decorator
 - Return JSON-serializable results
@@ -623,9 +937,46 @@ make redis-start
 - Use database caching for persistence
 - Follow FastMCP 2.0 patterns
 
+### Saty Indicator Development
+
+- **Pine Script parity is non-negotiable**: Every indicator must match `docs/*_pine_script.txt` exactly
+- **ATR source**: Always use Wilder ATR with `ewm(alpha=1/period, adjust=False)` — NOT `ewm(span=period)`
+- **EMA source**: Use `ewm(span=N, adjust=False)` for all ribbon EMAs — NOT Wilder
+- **ATR and PDC are always from `iloc[-2]`** (previous settled bar, not the forming bar)
+- **Compression tracker is stateful**: Must use a bar-by-bar `for` loop — vectorized boolean ops give wrong results
+- **Phase strings**: `"green"` / `"red"` / `"compression"` — never `"firing_up"` / `"firing_down"`
+- **call_trigger / put_trigger**: Always expose as top-level keys in the atr dict, not nested under `levels`
+- **Minimum bars**: Raise `ValueError` with clear message when input df is too short
+- **Test first**: Any change to an indicator file must be verified against `tests/satyland/`
+- **No yfinance in indicator files**: Indicators take a pre-fetched `pd.DataFrame` — I/O stays in the endpoint layer
+
 ## Troubleshooting
 
-### Common Issues
+### Saty API Issues
+
+**Saty tests fail to import (`ModuleNotFoundError: api`)**:
+```bash
+# Run from project root — api/ is a top-level package
+cd /Users/krishnaeedula/claude/trend-trading-mcp
+venv/bin/pytest tests/satyland/ -v
+```
+
+**`/trade-plan` returns 500 with KeyError**:
+- Likely a new key was added to an indicator that green_flag.py doesn't handle
+- Run `venv/bin/pytest tests/satyland/test_green_flag.py -v` — regression tests will catch it
+
+**yfinance returns empty DataFrame (400 from endpoint)**:
+- Ticker may be invalid or delisted
+- Intraday data (1m/5m) only available for recent days — use `timeframe="1d"` for older data
+- Some tickers require exchange suffix (e.g., `TSLA` not `TSLA.US`)
+
+**Saty root `conftest.py` blocks satyland tests**:
+```bash
+# Root conftest requires testcontainers — satyland tests are guarded by _MAVERICK_AVAILABLE
+# If you see ImportError from root conftest, check that _MAVERICK_AVAILABLE guard is in place
+```
+
+### Common Maverick Issues
 
 **Server won't start**:
 
@@ -732,7 +1083,20 @@ Once connected to Claude Desktop, test the backtesting framework:
 
 ## Recent Updates
 
-### Production-Ready Backtesting Framework (NEW)
+### Saty Trading System Integration
+
+- **Exact Pine Script Ports**: Three core indicators verified against Pine Script ground truth files
+  - `atr_levels.py`: Wilder ATR14 + PDC-anchored Fibonacci levels (ATR settled from previous bar)
+  - `pivot_ribbon.py`: EMA 8/13/21/48/200 + stateful compression tracker (2.0×ATR14 threshold)
+  - `phase_oscillator.py`: `EMA3(((close-EMA21)/(3×ATR14))×100)` + zone cross signals
+- **Green Flag Checklist**: A+/A/B/skip trade grading with 10 confirmation flags; 4 KeyError bugs fixed
+- **Price Structure Levels**: PDH/PDL/PMH/PML structural bias engine
+- **Full REST API**: FastAPI server at port 8080, deployable to Railway with `requirements.txt`
+- **115 Tests**: Complete test suite in `tests/satyland/` — no external dependencies, runs in ~0.5s
+- **Schwab Integration**: OAuth2 + real-time quotes + options chain via schwab-py
+- **Options Analytics**: ATM straddle / expected move + GEX by strike
+
+### Production-Ready Backtesting Framework
 
 - **VectorBT Integration**: High-performance vectorized backtesting engine
 - **15+ Built-in Strategies**: Including ML-powered adaptive, ensemble, and regime-aware algorithms
@@ -795,14 +1159,23 @@ Once connected to Claude Desktop, test the backtesting framework:
 
 ## Additional Resources
 
+### Saty System
+- **Full Saty skill reference**: `docs/saty_trading_skill.md` — complete trading methodology, all 9 setups, entry/exit rules, strike selection, risk management
+- **Pine Script ground truth**: `docs/saty_atr_levels_pine_script.txt`, `docs/pivot_ribbon_pine_script.txt`, `docs/phase_oscillator_pine_script.txt`
+- **Saty test suite**: `tests/satyland/` — 115 tests, no external dependencies
+
+### Maverick System
 - **Architecture docs**: `docs/` directory
 - **Portfolio Guide**: `docs/PORTFOLIO.md` - Complete guide to portfolio features
+- **Backtesting Guide**: `docs/BACKTESTING.md`
 - **Test examples**: `tests/` directory
 - **Development tools**: `tools/` directory
 - **Example scripts**: `scripts/` directory
 
-For detailed technical information and advanced usage, see the full documentation in the `docs/` directory.
-
 ---
 
-**Note**: This project is designed for personal use. It provides powerful stock analysis tools for Claude Desktop with pre-seeded S&P 500 data, without the complexity of multi-user systems, authentication, or billing. The database automatically seeds with 520 S&P 500 stocks and screening recommendations on first startup.
+**Note**: This project is designed for personal use. It provides two complementary trading systems:
+1. **Maverick MCP**: Powerful stock analysis and screening for Claude Desktop with pre-seeded S&P 500 data
+2. **Saty API**: Rules-based indicator system for precise trade timing, exact Python ports of the Saty Pine Scripts
+
+Use them independently or together — Maverick for candidate selection, Saty for entry grading and timing.

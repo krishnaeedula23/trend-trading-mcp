@@ -16,25 +16,31 @@ from collections.abc import AsyncGenerator, Generator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from testcontainers.postgres import PostgresContainer
-from testcontainers.redis import RedisContainer
 
 # Add the parent directory to the path to enable imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from maverick_mcp.api.api_server import create_api_app
-
-# Import all models to ensure they're registered with Base
-from maverick_mcp.data.models import get_db
-from maverick_mcp.database.base import Base
+try:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session, sessionmaker
+    from testcontainers.postgres import PostgresContainer
+    from testcontainers.redis import RedisContainer
+    from maverick_mcp.api.api_server import create_api_app
+    from maverick_mcp.data.models import get_db
+    from maverick_mcp.database.base import Base
+    _MAVERICK_AVAILABLE = True
+except ImportError:
+    _MAVERICK_AVAILABLE = False
+    PostgresContainer = None
+    RedisContainer = None
 
 
 # Container fixtures (session scope for efficiency)
 @pytest.fixture(scope="session")
 def postgres_container():
     """Create a PostgreSQL test container for the test session."""
+    if not _MAVERICK_AVAILABLE:
+        pytest.skip("testcontainers not available")
     with PostgresContainer("postgres:15-alpine") as postgres:
         postgres.with_env("POSTGRES_PASSWORD", "test")
         postgres.with_env("POSTGRES_USER", "test")
@@ -45,6 +51,8 @@ def postgres_container():
 @pytest.fixture(scope="session")
 def redis_container():
     """Create a Redis test container for the test session."""
+    if not _MAVERICK_AVAILABLE:
+        pytest.skip("testcontainers not available")
     with RedisContainer("redis:7-alpine") as redis:
         yield redis
 
@@ -109,7 +117,7 @@ def db_session(engine) -> Generator[Session, None, None]:
 
 
 # Environment setup
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=_MAVERICK_AVAILABLE)
 def setup_test_env(database_url: str, redis_url: str):
     """Set up test environment variables."""
     os.environ["DATABASE_URL"] = database_url

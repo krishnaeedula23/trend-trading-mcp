@@ -38,6 +38,7 @@ RUN uv sync --frozen
 COPY maverick_mcp ./maverick_mcp
 COPY alembic ./alembic
 COPY alembic.ini setup.py ./
+COPY api ./api
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

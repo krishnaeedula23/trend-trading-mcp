@@ -1,0 +1,13 @@
+# Trend Trading API – Railway deployment requirements
+# Minimal set for the api/ layer (no heavy MCP/LangChain/backtesting deps)
+fastapi>=0.115.12
+uvicorn[standard]>=0.35.0
+pydantic>=2.0.0
+httpx>=0.28.1
+python-dotenv>=1.0.1
+pandas>=2.2.3
+numpy>=1.26.4
+yfinance>=0.2.63
+schwab-py>=1.5.1
+redis>=6.2.0
+requests>=2.31.0

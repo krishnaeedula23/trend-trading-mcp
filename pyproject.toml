@@ -59,6 +59,8 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.22.0",
     # Prometheus metrics
     "prometheus-client>=0.21.1",
+    # Schwab brokerage integration
+    "schwab-py>=1.5.1",
     # Trading
     "fredapi>=0.5.2",
     "pandas-datareader>=0.10.0",
