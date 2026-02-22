@@ -28,7 +28,7 @@ export default function AnalyzeTickerPage({
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const timeframe = searchParams.get("tf") ?? "5m"
+  const timeframe = searchParams.get("tf") ?? "1d"
   const direction = searchParams.get("dir") ?? "bullish"
 
   const { data, error, isLoading, refresh } = useTradePlan(ticker, timeframe, direction)

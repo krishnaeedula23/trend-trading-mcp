@@ -32,7 +32,7 @@ const fetcher = async (url: string, body: unknown) => {
 
 export function useTradePlan(
   ticker: string | null,
-  timeframe: string = '5m',
+  timeframe: string = '1d',
   direction: string = 'bullish'
 ) {
   const { data, error, isLoading, mutate } = useSWR<TradePlanResponse>(

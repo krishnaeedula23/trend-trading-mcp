@@ -54,7 +54,7 @@ export async function railwayFetch(
  */
 export async function calculateIndicators(
   ticker: string,
-  timeframe: string = "5m"
+  timeframe: string = "1d"
 ): Promise<CalculateResponse> {
   const res = await railwayFetch("/api/satyland/calculate", {
     ticker,
@@ -68,7 +68,7 @@ export async function calculateIndicators(
  */
 export async function getTradePlan(
   ticker: string,
-  timeframe: string = "5m",
+  timeframe: string = "1d",
   direction: string = "bullish",
   vix?: number
 ): Promise<TradePlanResponse> {

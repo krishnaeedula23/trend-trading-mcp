@@ -39,7 +39,7 @@ export function TickerInput({
   defaultTicker = "",
 }: TickerInputProps) {
   const [ticker, setTicker] = useState(defaultTicker)
-  const [timeframe, setTimeframe] = useState("5m")
+  const [timeframe, setTimeframe] = useState("1d")
   const [direction, setDirection] = useState("bullish")
 
   function handleSubmit(e: React.FormEvent) {

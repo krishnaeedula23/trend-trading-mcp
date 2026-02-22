@@ -15,7 +15,7 @@ const fetcher = async (url: string, body: unknown) => {
 
 export function useBatchCalculate(
   tickers: string[],
-  timeframe: string = '5m',
+  timeframe: string = '1d',
   direction: string = 'bullish'
 ) {
   const key = tickers.length > 0
