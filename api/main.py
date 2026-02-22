@@ -18,15 +18,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.endpoints import options, satyland, schwab
 
-# If SCHWAB_TOKEN_B64 is set (Railway deployment), decode it to the token file
-# so schwab-py can find it at the expected path.
+# If SCHWAB_TOKEN_B64 is set (Railway deployment), bootstrap the token file
+# from the env var — but only if no token file exists yet (e.g. first deploy
+# or volume is empty). On subsequent restarts the refreshed token on the
+# persistent volume takes precedence, so we never overwrite it.
 _token_b64 = os.getenv("SCHWAB_TOKEN_B64")
 if _token_b64:
     _token_path = Path(os.getenv("SCHWAB_TOKEN_FILE", "/tmp/schwab_tokens.json"))
-    _token_path.parent.mkdir(parents=True, exist_ok=True)
-    # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
-    _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
-    _token_path.write_bytes(base64.b64decode(_clean_b64))
+    if not _token_path.exists():
+        _token_path.parent.mkdir(parents=True, exist_ok=True)
+        # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
+        _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
+        _token_path.write_bytes(base64.b64decode(_clean_b64))
 
 app = FastAPI(
     title="Trend Trading API",
