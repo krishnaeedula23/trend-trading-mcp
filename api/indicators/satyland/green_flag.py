@@ -16,6 +16,7 @@ def green_flag_checklist(
     structure: dict,
     direction: str,  # "bullish" or "bearish"
     vix: float | None = None,
+    mtf_ribbons: dict[str, dict] | None = None,
 ) -> dict:
     """
     Score a trade setup against the 10-flag Green Flag Checklist.
@@ -66,11 +67,19 @@ def green_flag_checklist(
     else:
         flags["structure_confirmed"] = structure.get("price_below_pdl", False) or structure.get("price_below_pml", False)
 
-    # 5. MTF alignment (proxy: above/below 200 EMA as macro filter)
-    if is_bull:
-        flags["mtf_aligned"] = ribbon.get("above_200ema", False)
+    # 5. MTF alignment: all higher-TF ribbons stacked in trade direction
+    if mtf_ribbons:
+        target_state = "bullish" if is_bull else "bearish"
+        flags["mtf_aligned"] = all(
+            r.get("ribbon_state") == target_state
+            for r in mtf_ribbons.values()
+        )
     else:
-        flags["mtf_aligned"] = not ribbon.get("above_200ema", True)
+        # Fallback: above/below 200 EMA as proxy when MTF data unavailable
+        if is_bull:
+            flags["mtf_aligned"] = ribbon.get("above_200ema", False)
+        else:
+            flags["mtf_aligned"] = not ribbon.get("above_200ema", True)
 
     # 6. Phase Oscillator firing in direction
     if is_bull:

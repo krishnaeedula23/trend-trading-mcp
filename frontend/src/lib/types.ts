@@ -174,10 +174,21 @@ export interface GreenFlag {
 
 // --- Trade Plan Response (POST /api/satyland/trade-plan) ---
 
+export interface MtfRibbonEntry {
+  ribbon_state: RibbonState;
+  bias_candle: BiasCandle;
+  conviction_arrow: ConvictionArrow;
+  last_conviction_type: ConvictionArrow;
+  last_conviction_bars_ago: number | null;
+  in_compression: boolean;
+  above_200ema: boolean;
+}
+
 export interface TradePlanResponse extends CalculateResponse {
   direction: string;
   price_structure: PriceStructure;
   green_flag: GreenFlag;
+  mtf_ribbons?: Record<string, MtfRibbonEntry>;
 }
 
 // --- Idea (Supabase row) ---

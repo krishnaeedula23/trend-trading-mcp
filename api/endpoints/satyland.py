@@ -47,6 +47,17 @@ TIMEFRAME_TO_MODE: dict[str, str] = {
     "1w": "position",                                # weekly → quarterly ATR
 }
 
+# Chart timeframe → higher timeframes to check for MTF ribbon alignment
+HIGHER_TIMEFRAMES: dict[str, list[str]] = {
+    "1m":  ["1h", "1d", "1w"],
+    "5m":  ["1h", "1d", "1w"],
+    "15m": ["1h", "1d", "1w"],
+    "1h":  ["4h", "1d", "1w"],
+    "4h":  ["1d", "1w"],
+    "1d":  ["1w"],
+    "1w":  [],
+}
+
 
 class CalculateRequest(BaseModel):
     ticker: str = Field(..., description="Ticker symbol, e.g. AAPL")
@@ -207,6 +218,23 @@ async def calculate_indicators(req: CalculateRequest):
         raise HTTPException(status_code=500, detail=f"Calculation failed: {exc}") from exc
 
 
+async def _fetch_mtf_ribbons(ticker: str, timeframe: str) -> dict[str, dict]:
+    """Fetch pivot ribbon for each higher timeframe in parallel."""
+    higher_tfs = HIGHER_TIMEFRAMES.get(timeframe, [])
+    if not higher_tfs:
+        return {}
+
+    async def _compute_ribbon(tf: str) -> tuple[str, dict | None]:
+        try:
+            df = await asyncio.to_thread(_fetch_intraday, ticker, tf)
+            return tf, pivot_ribbon(df)
+        except Exception:
+            return tf, None
+
+    results = await asyncio.gather(*(_compute_ribbon(tf) for tf in higher_tfs))
+    return {tf: r for tf, r in results if r is not None}
+
+
 @router.post("/trade-plan")
 async def trade_plan(req: TradePlanRequest):
     """
@@ -232,7 +260,12 @@ async def trade_plan(req: TradePlanRequest):
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
         struct = price_structure(daily_df)
-        flags  = green_flag_checklist(atr, ribbon, phase, struct, req.direction, req.vix)
+
+        # Fetch MTF ribbons in parallel
+        mtf_ribbons = await _fetch_mtf_ribbons(req.ticker, req.timeframe)
+
+        flags  = green_flag_checklist(atr, ribbon, phase, struct, req.direction,
+                                      req.vix, mtf_ribbons=mtf_ribbons)
 
         return JSONResponse(
             content={
@@ -246,6 +279,7 @@ async def trade_plan(req: TradePlanRequest):
                 "phase_oscillator": phase,
                 "price_structure":  struct,
                 "green_flag":       flags,
+                "mtf_ribbons":      mtf_ribbons,
             },
             headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
         )
@@ -287,7 +321,9 @@ async def batch_calculate(req: BatchCalculateRequest):
                 ribbon = pivot_ribbon(intraday_df)
                 phase = phase_oscillator(intraday_df)
                 struct = price_structure(daily_df)
-                flags = green_flag_checklist(atr, ribbon, phase, struct, req.direction)
+                mtf = await _fetch_mtf_ribbons(ticker, req.timeframe)
+                flags = green_flag_checklist(atr, ribbon, phase, struct, req.direction,
+                                             mtf_ribbons=mtf)
 
                 return {
                     "ticker": ticker.upper(),
@@ -302,6 +338,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                         "phase_oscillator": phase,
                         "price_structure": struct,
                         "green_flag": flags,
+                        "mtf_ribbons": mtf,
                     },
                 }
             except Exception as exc:
