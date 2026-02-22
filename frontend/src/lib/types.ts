@@ -62,6 +62,8 @@ export interface PivotRibbon {
   bias_candle: BiasCandle;
   bias_signal: BiasSignal;
   conviction_arrow: ConvictionArrow;
+  last_conviction_type: ConvictionArrow;
+  last_conviction_bars_ago: number | null;
   spread: number;
   above_48ema: boolean;
   above_200ema: boolean;

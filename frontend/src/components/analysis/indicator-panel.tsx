@@ -240,27 +240,25 @@ function RibbonCard({ data }: { data: TradePlanResponse }) {
         />
         <DataRow
           label="13/48 Conviction"
-          value={convictionLabel(ribbon.conviction_arrow)}
+          value={convictionLabel(ribbon.last_conviction_type, ribbon.last_conviction_bars_ago)}
         />
       </CardContent>
     </Card>
   )
 }
 
-function convictionLabel(arrow: ConvictionArrow): React.ReactNode {
-  if (!arrow) {
-    return <span className="text-xs text-muted-foreground">--</span>
+function convictionLabel(arrow: ConvictionArrow, barsAgo: number | null): React.ReactNode {
+  if (!arrow || barsAgo == null) {
+    return <span className="text-xs text-muted-foreground">None</span>
   }
-  if (arrow === "bullish_crossover") {
-    return (
-      <Badge className="text-[10px] bg-emerald-600/20 text-emerald-400 border-emerald-600/30">
-        BULLISH CROSS
-      </Badge>
-    )
-  }
+  const label = arrow === "bullish_crossover" ? "BULL" : "BEAR"
+  const barsText = barsAgo === 0 ? "now" : `${barsAgo}b ago`
+  const colors = arrow === "bullish_crossover"
+    ? "bg-emerald-600/20 text-emerald-400 border-emerald-600/30"
+    : "bg-red-600/20 text-red-400 border-red-600/30"
   return (
-    <Badge className="text-[10px] bg-red-600/20 text-red-400 border-red-600/30">
-      BEARISH CROSS
+    <Badge className={cn("text-[10px]", colors)}>
+      {label} {barsText}
     </Badge>
   )
 }

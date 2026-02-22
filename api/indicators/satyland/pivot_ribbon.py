@@ -152,6 +152,23 @@ def pivot_ribbon(df: pd.DataFrame) -> dict:
         elif prev_13_above and not curr_13_above:
             conviction_arrow = "bearish_crossover"
 
+    # ── Last 13/48 crossover: scan backward to find when it last fired ─────
+    last_conviction_type = None
+    last_conviction_bars_ago = None
+    n = len(ema13)
+    if n >= 2:
+        for i in range(n - 1, 0, -1):
+            prev_above = float(ema13.iloc[i - 1]) >= float(ema48.iloc[i - 1])
+            curr_above = float(ema13.iloc[i]) >= float(ema48.iloc[i])
+            if not prev_above and curr_above:
+                last_conviction_type = "bullish_crossover"
+                last_conviction_bars_ago = n - 1 - i
+                break
+            elif prev_above and not curr_above:
+                last_conviction_type = "bearish_crossover"
+                last_conviction_bars_ago = n - 1 - i
+                break
+
     return {
         "ema8":             round(e8, 4),
         "ema13":            round(e13, 4),
@@ -162,6 +179,8 @@ def pivot_ribbon(df: pd.DataFrame) -> dict:
         "bias_candle":      bias_candle,
         "bias_signal":      bias_signal,
         "conviction_arrow": conviction_arrow,
+        "last_conviction_type": last_conviction_type,
+        "last_conviction_bars_ago": last_conviction_bars_ago,
         "spread":           round(e8 - e48, 4),
         "above_48ema":      above_48,              # master regime variable
         "above_200ema":     curr_close > e200,
