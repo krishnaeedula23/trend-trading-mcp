@@ -26,10 +26,15 @@ _token_b64 = os.getenv("SCHWAB_TOKEN_B64")
 if _token_b64:
     _token_path = Path(os.getenv("SCHWAB_TOKEN_FILE", "/tmp/schwab_tokens.json"))
     if not _token_path.exists():
-        _token_path.parent.mkdir(parents=True, exist_ok=True)
-        # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
-        _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
-        _token_path.write_bytes(base64.b64decode(_clean_b64))
+        try:
+            _token_path.parent.mkdir(parents=True, exist_ok=True)
+            # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
+            _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
+            _token_path.write_bytes(base64.b64decode(_clean_b64))
+        except OSError as e:
+            import warnings
+            warnings.warn(f"Could not write Schwab token to {_token_path}: {e}. "
+                          "Check volume mount permissions.")
 
 app = FastAPI(
     title="Trend Trading API",
