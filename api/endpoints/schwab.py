@@ -10,6 +10,9 @@ from api.integrations.schwab.token_manager import TOKEN_PATH, token_exists
 
 router = APIRouter(prefix="/api/schwab", tags=["schwab"])
 
+# Holds the auth_context between /auth/url and /auth/callback calls
+_pending_auth_context = None
+
 
 @router.get("/quote")
 async def get_quote(ticker: str = Query(..., description="Ticker symbol, e.g. AAPL")):
@@ -61,12 +64,13 @@ async def get_auth_url():
     if not client_id:
         raise HTTPException(status_code=500, detail="SCHWAB_CLIENT_ID not configured")
 
-    auth_context = schwab.auth.get_auth_context(client_id, callback_url)
+    global _pending_auth_context
+    _pending_auth_context = schwab.auth.get_auth_context(client_id, callback_url)
     return {
         "step": 1,
-        "auth_url": auth_context.authorization_url,
-        "callback_url": auth_context.callback_url,
-        "state": auth_context.state,
+        "auth_url": _pending_auth_context.authorization_url,
+        "callback_url": _pending_auth_context.callback_url,
+        "state": _pending_auth_context.state,
         "instructions": (
             "1. Open auth_url in your browser and log in to Schwab. "
             "2. After approving, copy the ENTIRE redirect URL from your browser. "
@@ -83,14 +87,16 @@ async def auth_callback(received_url: str):
     Paste the ENTIRE URL your browser was redirected to after Schwab login.
     schwab-py exchanges the code for tokens and saves them to SCHWAB_TOKEN_FILE.
     """
+    global _pending_auth_context
     client_id = os.getenv("SCHWAB_CLIENT_ID", "")
     app_secret = os.getenv("SCHWAB_CLIENT_SECRET", "")
-    callback_url = os.getenv("SCHWAB_REDIRECT_URI", "https://127.0.0.1")
 
     if not client_id or not app_secret:
         raise HTTPException(status_code=500, detail="SCHWAB_CLIENT_ID / SCHWAB_CLIENT_SECRET not configured")
+    if _pending_auth_context is None:
+        raise HTTPException(status_code=400, detail="No pending auth session. Call GET /api/schwab/auth/url first.")
 
-    auth_context = schwab.auth.get_auth_context(client_id, callback_url)
+    auth_context = _pending_auth_context
 
     def write_token(token):
         import json
@@ -108,7 +114,8 @@ async def auth_callback(received_url: str):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {exc}") from exc
 
-    # Reset singleton so next request loads fresh token
+    # Clear pending context and reset client singleton
+    _pending_auth_context = None
     schwab_client.reset_client()
     return {"status": "tokens saved", "token_file": str(TOKEN_PATH)}
 
