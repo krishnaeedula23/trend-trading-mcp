@@ -58,6 +58,121 @@ P2
 - Consolidate tests location / test suite tiers (fast vs slow), if not already formalized.
 - Clean up unfinished registry/init TODOs: `maverick_mcp/langchain_tools/registry.py`.
 
+## Frontend & UI Roadmap
+
+The frontend (`frontend/`) is a Next.js 15 app deployed on Vercel. Current pages: dashboard, analyze, ideas. The following items expand it into a complete trading workstation.
+
+### Missing Pages
+
+| Route | Purpose | Priority |
+|-------|---------|----------|
+| `/screener` | Scan universe with Saty indicators, rank by grade | P0 (see Screener section below) |
+| `/alerts` | Manage price/indicator alerts linked to ideas | P1 |
+| `/watchlists` | CRUD watchlists, batch calculate indicators | P1 |
+| `/settings` | API keys, default timeframe, notification prefs | P2 |
+| `/backtest` | Display VectorBT backtest results from Maverick | P2 |
+
+### shadcn Component Additions
+
+| Component | Use Case |
+|-----------|----------|
+| `data-table` | Screener results, ideas list, watchlist tickers |
+| `command` | Global ticker search (Cmd+K) |
+| `sonner` | Toast notifications (already added to project) |
+| `chart` | Recharts wrapper for Phase Oscillator gauge |
+| `calendar` / `date-picker` | Backtest date range selection |
+
+### Lightweight Charts Integration
+
+Add TradingView Lightweight Charts to `/analyze/[ticker]` for:
+- Candlestick chart with ATR level overlays (call/put triggers, Fib levels)
+- EMA ribbon overlay (8/13/21/48/200)
+- Phase Oscillator as a sub-chart pane
+
+### UI Approach
+
+No design skills or Figma needed. Use:
+- shadcn blocks and pre-built component patterns
+- Claude Code for rapid iteration
+- Existing dark theme (`frontend/src/app/globals.css`)
+- Consistent with current layout (sidebar + header from `frontend/src/components/layout/`)
+
+---
+
+## Screener Feature (New)
+
+### Motivation
+
+thinkorswim custom screeners cannot be pulled via Schwab API (no endpoint exists). This feature replaces that workflow by running Saty indicators server-side against a stock universe and returning ranked results.
+
+### Step 1: Wire Up Unused `schwab-py` Methods
+
+`schwab-py` v1.5.1 is already installed. These methods exist in `schwab.client.Client` but aren't exposed in our wrapper:
+
+| Method | What It Provides | Wrapper File |
+|--------|-----------------|--------------|
+| `get_movers(index)` | Top 10 gainers/losers/volume for `$SPX`/`$DJI`/`$COMPX` | `api/integrations/schwab/client.py` |
+| `get_quotes(symbols)` | Bulk quotes (we currently only do single via `get_quote`) | `api/integrations/schwab/client.py` |
+| `get_instruments(symbols, 'fundamental')` | P/E, market cap, dividend yield | `api/integrations/schwab/client.py` |
+
+### Step 2: New API Endpoints
+
+| Endpoint | Method | File | Purpose |
+|----------|--------|------|---------|
+| `/api/schwab/movers` | GET | `api/endpoints/schwab.py` | Expose movers by index |
+| `/api/schwab/quotes` | GET | `api/endpoints/schwab.py` | Bulk quotes |
+| `/api/schwab/fundamentals` | GET | `api/endpoints/schwab.py` | Fundamentals lookup |
+| `/api/screener/scan` | POST | `api/endpoints/screener.py` (new) | Orchestrator endpoint |
+
+### Step 3: Screener Logic (`POST /api/screener/scan`)
+
+```
+Request: { universe: "sp500" | "watchlist" | "movers", direction: "bullish" | "bearish",
+           timeframe: "5m" | "15m" | "1h" | "1d", min_grade: "B", sector?: "Technology" }
+
+1. Resolve stock universe:
+   - "sp500"     → Query Maverick DB (520 tickers)
+   - "watchlist" → Fetch user watchlist from Supabase
+   - "movers"    → Call Schwab get_movers($SPX)
+
+2. Fetch bulk price history via Schwab (or yfinance fallback)
+
+3. Run Saty indicators per ticker:
+   - ATR Levels  (atr_levels.py)
+   - Pivot Ribbon (pivot_ribbon.py)
+   - Phase Oscillator (phase_oscillator.py)
+
+4. Grade each with Green Flag (green_flag.py)
+
+5. Filter by min_grade and optional sector
+
+6. Return ranked list sorted by grade (A+ first), then score descending
+
+Response: { results: [{ ticker, grade, score, direction, atr_status,
+            ribbon_state, bias_candle, phase, call_trigger, put_trigger }], count, scanned }
+```
+
+### Step 4: Frontend (`/screener`)
+
+- **Filters panel**: direction, timeframe, min grade, sector (collapsible)
+- **Results table**: shadcn `data-table` with sortable columns
+- **Row click** → navigates to `/analyze/[ticker]`
+- **Actions per row**: save to watchlist, create idea from result
+- **Loading state**: skeleton rows while scan runs (can take 10-30s for large universes)
+
+### Reuse Existing Code
+
+| What | Where |
+|------|-------|
+| All 5 Saty indicators | `api/indicators/satyland/*` |
+| Calculate/trade-plan patterns | `api/endpoints/satyland.py` |
+| Grade badge component | `frontend/src/components/ideas/grade-badge.tsx` |
+| SWR fetch pattern | `frontend/src/hooks/use-trade-plan.ts` |
+| Idea card layout | `frontend/src/components/ideas/idea-card.tsx` |
+| Railway fetch wrapper | `frontend/src/lib/railway.ts` |
+
+---
+
 ## MCP/FastMCP Alignment Notes
 
 See `mcp-fastmcp-research.md` for up-to-date research findings and the recommended transport/tool patterns to adopt.

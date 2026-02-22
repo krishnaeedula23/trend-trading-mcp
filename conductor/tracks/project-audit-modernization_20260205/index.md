@@ -7,11 +7,12 @@
 
 - [Specification](./spec.md)
 - [Implementation Plan](./plan.md)
+- [Modernization Roadmap](./modernization.md)
 
 ## Progress
 
-- Phases: 0/3 complete
-- Tasks: 0/8 complete
+- Phases: 0/4 complete
+- Tasks: 0/13 complete
 
 ## Quick Links
 
