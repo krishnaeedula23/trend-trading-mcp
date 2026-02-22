@@ -111,13 +111,30 @@ function DataRow({
 
 // --- Cards ---
 
+const MODE_ATR_LABEL: Record<string, string> = {
+  day: "Daily ATR(14)",
+  multiday: "Weekly ATR(14)",
+  swing: "Monthly ATR(14)",
+  position: "Quarterly ATR(14)",
+}
+
+const MODE_PDC_LABEL: Record<string, string> = {
+  day: "Prev Day Close",
+  multiday: "Prev Week Close",
+  swing: "Prev Month Close",
+  position: "Prev Quarter Close",
+}
+
 function AtrCard({ data }: { data: TradePlanResponse }) {
   const atr = data.atr_levels
+  const modeLabel = atr.trading_mode_label || "Day"
+  const atrLabel = MODE_ATR_LABEL[atr.trading_mode] || "ATR(14)"
+  const pdcLabel = MODE_PDC_LABEL[atr.trading_mode] || "PDC"
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">ATR Levels</CardTitle>
+          <CardTitle className="text-sm">{modeLabel} Levels</CardTitle>
           <Badge className={cn("text-[10px]", atrStatusColor(atr.atr_status))}>
             {atr.atr_status.toUpperCase()}
           </Badge>
@@ -125,8 +142,8 @@ function AtrCard({ data }: { data: TradePlanResponse }) {
       </CardHeader>
       <CardContent className="space-y-2">
         <DataRow label="Price" value={`$${fmt(atr.current_price)}`} />
-        <DataRow label="PDC" value={`$${fmt(atr.pdc)}`} />
-        <DataRow label="ATR(14)" value={fmt(atr.atr)} />
+        <DataRow label={pdcLabel} value={`$${fmt(atr.pdc)}`} />
+        <DataRow label={atrLabel} value={fmt(atr.atr)} />
         <div className="my-2 h-px bg-border/50" />
         <DataRow
           label="Call Trigger"

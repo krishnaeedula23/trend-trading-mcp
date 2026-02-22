@@ -18,6 +18,7 @@ export interface TriggerBox {
 
 export type AtrStatus = "green" | "orange" | "red";
 export type Trend = "bullish" | "bearish" | "neutral";
+export type TradingMode = "day" | "multiday" | "swing" | "position";
 
 export interface AtrLevels {
   atr: number;
@@ -29,11 +30,14 @@ export interface AtrLevels {
   trigger_box: TriggerBox;
   price_position: string;
   daily_range: number;
+  period_range: number;
   atr_covered_pct: number;
   atr_status: AtrStatus;
   atr_room_ok: boolean;
   chopzilla: boolean;
   trend: Trend;
+  trading_mode: TradingMode;
+  trading_mode_label: string;
 }
 
 // --- Pivot Ribbon ---
@@ -112,8 +116,9 @@ export interface PhaseOscillator {
 export interface CalculateResponse {
   ticker: string;
   timeframe: string;
+  trading_mode: TradingMode;
   bars: number;
-  daily_bars: number;
+  atr_source_bars: number;
   atr_levels: AtrLevels;
   pivot_ribbon: PivotRibbon;
   phase_oscillator: PhaseOscillator;

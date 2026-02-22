@@ -2,17 +2,20 @@
 Saty ATR Levels — exact Python port of the Pine Script.
 
 Pine Script ground truth (saty_atr_levels_pine_script.txt):
-  - ATR source      : ta.atr(14)[1] on the DAILY timeframe — previous day's settled ATR
-  - PDC / zero line : daily close[1]  — previous day's close
-  - ATR covered %   : (period_high - period_low) / atr * 100  — today's daily H-L range
+  - Trading modes   : Day (daily ATR), Multiday (weekly), Swing (monthly),
+                      Position (quarterly), Long-term (yearly)
+  - ATR source      : ta.atr(14)[1] on the mode's timeframe — previous period's settled ATR
+  - PDC / zero line : close[1] on the mode's timeframe — previous period's close
+  - ATR covered %   : (period_high - period_low) / atr * 100
   - ATR status      : ≤70% green (room), 70-90% orange (warning), ≥90% red (overextended)
   - Levels          : ±23.6%, ±38.2%, ±50%, ±61.8%, ±78.6%, ±100%
   - Extensions      : ±123.6%, ±161.8%, ±200%, ±223.6%, ±261.8%, ±300%
   - Trend label     : close >= EMA8 >= EMA21 >= EMA34 → bullish
                       close <= EMA8 <= EMA21 <= EMA34 → bearish
 
-All inputs must be DAILY OHLCV. The intraday df is accepted separately only for
-computing the EMA-based trend label (same as the Pine Script chart-level EMAs).
+The first argument (atr_source_df) provides the OHLCV bars for computing ATR and PDC.
+For Day mode this is daily bars; for Multiday, weekly bars; for Swing, monthly bars; etc.
+The intraday_df is used only for the EMA-based trend label.
 """
 
 import pandas as pd
@@ -60,16 +63,21 @@ _EXT_FIBS = [
 
 
 def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
-               atr_period: int = 14, include_extensions: bool = False) -> dict:
+               atr_period: int = 14, include_extensions: bool = False,
+               trading_mode: str = "day") -> dict:
     """
-    Compute Saty ATR Levels from daily OHLCV data.
+    Compute Saty ATR Levels from higher-timeframe OHLCV data.
 
     Args:
-        daily_df:          Daily OHLCV — at least 15 rows for stable ATR.
-        intraday_df:       Optional intraday OHLCV for EMA-based trend label.
-                           If None, trend label is derived from daily data.
+        daily_df:          ATR source OHLCV — daily bars for Day mode, weekly for
+                           Multiday, monthly for Swing, quarterly for Position.
+                           Named ``daily_df`` for backward compatibility.
+        intraday_df:       Optional chart-timeframe OHLCV for EMA-based trend label.
+                           If None, trend label is derived from atr_source data.
         atr_period:        ATR lookback (default 14).
         include_extensions: Include Valhalla extension levels beyond 100%.
+        trading_mode:      One of "day", "multiday", "swing", "position".
+                           Controls the label shown in the response.
 
     Returns:
         Full ATR Levels dict matching Pine Script outputs.
@@ -77,13 +85,13 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
     if len(daily_df) < 2:
         raise ValueError("Need at least 2 daily bars")
 
-    # ── ATR and PDC from daily data ────────────────────────────────────────────
+    # ── ATR and PDC from source data ─────────────────────────────────────────
     atr_series = _wilder_atr(daily_df, atr_period)
     # Pine: ta.atr(14)[1] = previous bar's ATR (settled, not the forming bar)
     atr = float(atr_series.iloc[-2])
-    # Pine: close[1] on daily = previous day's close
+    # Pine: close[1] on the mode's timeframe = previous period's close
     pdc = float(daily_df["close"].iloc[-2])
-    # Today's forming daily bar
+    # Current forming bar
     today_high  = float(daily_df["high"].iloc[-1])
     today_low   = float(daily_df["low"].iloc[-1])
     current_price = float(daily_df["close"].iloc[-1])
@@ -166,6 +174,13 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
     else:
         trend = "neutral"
 
+    _MODE_LABELS = {
+        "day": "Day",
+        "multiday": "Multiday",
+        "swing": "Swing",
+        "position": "Position",
+    }
+
     return {
         "atr":             round(atr, 4),
         "pdc":             round(pdc, 4),
@@ -179,10 +194,13 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
             "inside": inside_trigger_box,
         },
         "price_position":  price_position,
-        "daily_range":     round(daily_range, 4),
+        "daily_range":     round(daily_range, 4),   # backward compat
+        "period_range":    round(daily_range, 4),
         "atr_covered_pct": atr_covered_pct,
         "atr_status":      atr_status,       # green / orange / red
         "atr_room_ok":     atr_status == "green",
         "chopzilla":       inside_trigger_box,
         "trend":           trend,             # bullish / bearish / neutral
+        "trading_mode":    trading_mode,
+        "trading_mode_label": _MODE_LABELS.get(trading_mode, "Day"),
     }

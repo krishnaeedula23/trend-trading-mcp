@@ -1,7 +1,12 @@
 """
 Satyland indicator endpoints — exact ports of Saty Trading System Pine Scripts.
 
-ATR Levels always run on DAILY data (matching Pine Script's daily-timeframe request).
+ATR Levels use higher-timeframe data based on the trading mode:
+  Day (intraday charts) → daily ATR/PDC
+  Multiday (hourly charts) → weekly ATR/PDC
+  Swing (daily charts) → monthly ATR/PDC
+  Position (weekly charts) → quarterly ATR/PDC
+
 Pivot Ribbon and Phase Oscillator run on the requested chart timeframe.
 """
 
@@ -33,9 +38,21 @@ TIMEFRAME_MAP = {
 }
 
 
+# Chart timeframe → default ATR trading mode (Pine Script mapping)
+TIMEFRAME_TO_MODE: dict[str, str] = {
+    "1m": "day", "5m": "day", "15m": "day",       # intraday → daily ATR
+    "1h": "multiday", "4h": "multiday",             # hourly → weekly ATR
+    "1d": "swing",                                   # daily → monthly ATR
+    "1w": "position",                                # weekly → quarterly ATR
+}
+
+
 class CalculateRequest(BaseModel):
     ticker: str = Field(..., description="Ticker symbol, e.g. AAPL")
     timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"] = Field("5m")
+    trading_mode: Literal["day", "multiday", "swing", "position"] | None = Field(
+        None, description="ATR trading mode. Auto-derived from timeframe if not set."
+    )
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False, description="Include Valhalla extension levels beyond 100%")
 
@@ -43,6 +60,9 @@ class CalculateRequest(BaseModel):
 class TradePlanRequest(BaseModel):
     ticker: str = Field(..., description="Ticker symbol")
     timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"] = Field("5m")
+    trading_mode: Literal["day", "multiday", "swing", "position"] | None = Field(
+        None, description="ATR trading mode. Auto-derived from timeframe if not set."
+    )
     direction: Literal["bullish", "bearish"] = Field(..., description="Trade direction")
     vix: float | None = Field(None, description="Current VIX level for bias filter")
     atr_period: int = Field(14, ge=5, le=50)
@@ -70,6 +90,55 @@ def _fetch_daily(ticker: str, lookback: str = "3mo") -> pd.DataFrame:
     return _normalise_columns(df)
 
 
+def _resample_to_quarterly(monthly_df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate monthly bars into quarterly OHLCV (yfinance has no 3M interval)."""
+    return monthly_df.resample("QS").agg({
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum" if "volume" in monthly_df.columns else "first",
+    }).dropna()
+
+
+def _fetch_atr_source(ticker: str, trading_mode: str) -> pd.DataFrame:
+    """
+    Fetch OHLCV at the timeframe matching the ATR trading mode.
+
+    Pine Script mapping:
+      Day      → daily bars   (request.security D)
+      Multiday → weekly bars  (request.security W)
+      Swing    → monthly bars (request.security M)
+      Position → quarterly bars (request.security 3M, aggregated from monthly)
+    """
+    if trading_mode == "day":
+        return _fetch_daily(ticker, lookback="3mo")
+    elif trading_mode == "multiday":
+        df = yf.download(ticker, period="2y", interval="1wk",
+                         auto_adjust=True, progress=False)
+        if df.empty:
+            raise ValueError(f"No weekly data for {ticker}")
+        return _normalise_columns(df)
+    elif trading_mode == "swing":
+        df = yf.download(ticker, period="10y", interval="1mo",
+                         auto_adjust=True, progress=False)
+        if df.empty:
+            raise ValueError(f"No monthly data for {ticker}")
+        return _normalise_columns(df)
+    elif trading_mode == "position":
+        df = yf.download(ticker, period="10y", interval="1mo",
+                         auto_adjust=True, progress=False)
+        if df.empty:
+            raise ValueError(f"No monthly data for {ticker}")
+        monthly = _normalise_columns(df)
+        quarterly = _resample_to_quarterly(monthly)
+        if len(quarterly) < 2:
+            raise ValueError(f"Not enough quarterly data for {ticker}")
+        return quarterly
+    else:
+        return _fetch_daily(ticker, lookback="3mo")
+
+
 def _fetch_intraday(ticker: str, timeframe: str) -> pd.DataFrame:
     """Fetch intraday OHLCV for Pivot Ribbon and Phase Oscillator."""
     if timeframe == "1d":
@@ -93,19 +162,22 @@ async def calculate_indicators(req: CalculateRequest):
     """
     Run all three Saty indicators.
 
-    ATR Levels always use daily OHLCV (PDC + daily ATR) per Pine Script.
-    Pivot Ribbon and Phase Oscillator use the requested chart timeframe.
+    ATR Levels use higher-timeframe data based on trading mode (auto-derived
+    from chart timeframe if not specified). Pivot Ribbon and Phase Oscillator
+    use the requested chart timeframe.
     """
+    mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
     try:
-        daily_df    = _fetch_daily(req.ticker)
-        intraday_df = _fetch_intraday(req.ticker, req.timeframe)
+        atr_source_df = _fetch_atr_source(req.ticker, mode)
+        intraday_df   = _fetch_intraday(req.ticker, req.timeframe)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        atr    = atr_levels(daily_df, intraday_df=intraday_df,
+        atr    = atr_levels(atr_source_df, intraday_df=intraday_df,
                             atr_period=req.atr_period,
-                            include_extensions=req.include_extensions)
+                            include_extensions=req.include_extensions,
+                            trading_mode=mode)
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
 
@@ -113,8 +185,9 @@ async def calculate_indicators(req: CalculateRequest):
             content={
                 "ticker":           req.ticker.upper(),
                 "timeframe":        req.timeframe,
+                "trading_mode":     mode,
                 "bars":             len(intraday_df),
-                "daily_bars":       len(daily_df),
+                "atr_source_bars":  len(atr_source_df),
                 "atr_levels":       atr,
                 "pivot_ribbon":     ribbon,
                 "phase_oscillator": phase,
@@ -130,17 +203,23 @@ async def trade_plan(req: TradePlanRequest):
     """
     Full Saty trade plan: all indicators + price structure + Green Flag Checklist.
     Returns A+/A/B/skip grade with verbal audit.
+
+    ATR Levels use the trading mode's timeframe. Price Structure always uses
+    daily data (PDH/PDL are inherently daily concepts).
     """
+    mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
     try:
-        daily_df    = _fetch_daily(req.ticker)
-        intraday_df = _fetch_intraday(req.ticker, req.timeframe)
+        atr_source_df = _fetch_atr_source(req.ticker, mode)
+        daily_df      = _fetch_daily(req.ticker) if mode != "day" else atr_source_df
+        intraday_df   = _fetch_intraday(req.ticker, req.timeframe)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        atr    = atr_levels(daily_df, intraday_df=intraday_df,
+        atr    = atr_levels(atr_source_df, intraday_df=intraday_df,
                             atr_period=req.atr_period,
-                            include_extensions=req.include_extensions)
+                            include_extensions=req.include_extensions,
+                            trading_mode=mode)
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
         struct = price_structure(daily_df)
@@ -150,6 +229,7 @@ async def trade_plan(req: TradePlanRequest):
             content={
                 "ticker":           req.ticker.upper(),
                 "timeframe":        req.timeframe,
+                "trading_mode":     mode,
                 "direction":        req.direction,
                 "bars":             len(intraday_df),
                 "atr_levels":       atr,
