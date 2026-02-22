@@ -3,9 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Lightbulb, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { IdeaCard } from "@/components/ideas/idea-card"
+import { IdeaCardSkeleton } from "@/components/skeletons/idea-card-skeleton"
 import { useIdeas, updateIdea, deleteIdea } from "@/hooks/use-ideas"
 import type { IdeaStatus } from "@/lib/types"
 
@@ -26,12 +28,14 @@ export default function IdeasPage() {
     try {
       if (newStatus === "delete") {
         await deleteIdea(id)
+        toast.success("Idea deleted")
       } else {
         await updateIdea(id, { status: newStatus as IdeaStatus })
+        toast.success(`Idea marked as ${newStatus}`)
       }
       refresh()
-    } catch {
-      // Silently handle error
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update idea")
     }
   }
 
@@ -64,10 +68,12 @@ export default function IdeasPage() {
         </TabsList>
       </Tabs>
 
-      {/* Loading state */}
+      {/* Loading skeletons */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <p className="text-sm text-muted-foreground">Loading ideas...</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <IdeaCardSkeleton key={i} />
+          ))}
         </div>
       )}
 

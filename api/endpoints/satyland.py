@@ -10,6 +10,7 @@ ATR Levels use higher-timeframe data based on the trading mode:
 Pivot Ribbon and Phase Oscillator run on the requested chart timeframe.
 """
 
+import asyncio
 from typing import Literal
 
 import pandas as pd
@@ -55,6 +56,14 @@ class CalculateRequest(BaseModel):
     )
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False, description="Include Valhalla extension levels beyond 100%")
+
+
+class BatchCalculateRequest(BaseModel):
+    tickers: list[str] = Field(..., description="List of ticker symbols (max 20)", min_length=1, max_length=20)
+    timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"] = Field("5m")
+    direction: Literal["bullish", "bearish"] = Field("bullish")
+    trading_mode: Literal["day", "multiday", "swing", "position"] | None = Field(None)
+    atr_period: int = Field(14, ge=5, le=50)
 
 
 class TradePlanRequest(BaseModel):
@@ -255,3 +264,57 @@ async def get_price_structure(req: CalculateRequest):
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/batch-calculate")
+async def batch_calculate(req: BatchCalculateRequest):
+    """
+    Run trade-plan calculation for multiple tickers in parallel.
+    Returns { results: [{ ticker, success, data?, error? }, ...] }.
+    """
+    mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
+    sem = asyncio.Semaphore(5)
+
+    async def process_one(ticker: str) -> dict:
+        async with sem:
+            try:
+                atr_source_df = await asyncio.to_thread(_fetch_atr_source, ticker, mode)
+                daily_df = await asyncio.to_thread(_fetch_daily, ticker) if mode != "day" else atr_source_df
+                intraday_df = await asyncio.to_thread(_fetch_intraday, ticker, req.timeframe)
+
+                atr = atr_levels(atr_source_df, intraday_df=intraday_df,
+                                 atr_period=req.atr_period, trading_mode=mode)
+                ribbon = pivot_ribbon(intraday_df)
+                phase = phase_oscillator(intraday_df)
+                struct = price_structure(daily_df)
+                flags = green_flag_checklist(atr, ribbon, phase, struct, req.direction)
+
+                return {
+                    "ticker": ticker.upper(),
+                    "success": True,
+                    "data": {
+                        "ticker": ticker.upper(),
+                        "timeframe": req.timeframe,
+                        "trading_mode": mode,
+                        "direction": req.direction,
+                        "atr_levels": atr,
+                        "pivot_ribbon": ribbon,
+                        "phase_oscillator": phase,
+                        "price_structure": struct,
+                        "green_flag": flags,
+                    },
+                }
+            except Exception as exc:
+                return {
+                    "ticker": ticker.upper(),
+                    "success": False,
+                    "error": str(exc),
+                }
+
+    results = await asyncio.gather(
+        *(process_one(t) for t in req.tickers)
+    )
+    return JSONResponse(
+        content={"results": results},
+        headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
+    )

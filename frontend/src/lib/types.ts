@@ -217,6 +217,19 @@ export interface Idea {
   updated_at: string;
 }
 
+// --- Batch Calculate ---
+
+export interface BatchResultItem {
+  ticker: string;
+  success: boolean;
+  data?: TradePlanResponse;
+  error?: string;
+}
+
+export interface BatchCalculateResponse {
+  results: BatchResultItem[];
+}
+
 // --- Watchlist (Supabase row) ---
 
 export interface Watchlist {

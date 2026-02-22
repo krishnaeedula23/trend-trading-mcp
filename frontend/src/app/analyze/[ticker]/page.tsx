@@ -2,17 +2,22 @@
 
 import React, { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Loader2, Save, CheckCircle2 } from "lucide-react"
+import { Save, CheckCircle2, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { TickerInput } from "@/components/analysis/ticker-input"
 import { IndicatorPanel } from "@/components/analysis/indicator-panel"
 import { GreenFlagChecklist } from "@/components/analysis/green-flag-checklist"
 import { GradeBadge } from "@/components/ideas/grade-badge"
 import { PhaseGauge } from "@/components/charts/phase-gauge"
 import { RibbonIndicator } from "@/components/charts/ribbon-indicator"
+import { IndicatorPanelSkeleton } from "@/components/skeletons/indicator-panel-skeleton"
+import { ErrorDisplay } from "@/components/ui/error-display"
 import { useTradePlan } from "@/hooks/use-trade-plan"
 import { createIdea } from "@/hooks/use-ideas"
+import { categorizeError, userMessage } from "@/lib/errors"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function AnalyzeTickerPage({
   params,
@@ -26,7 +31,7 @@ export default function AnalyzeTickerPage({
   const timeframe = searchParams.get("tf") ?? "5m"
   const direction = searchParams.get("dir") ?? "bullish"
 
-  const { data, error, isLoading } = useTradePlan(ticker, timeframe, direction)
+  const { data, error, isLoading, refresh } = useTradePlan(ticker, timeframe, direction)
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -66,17 +71,21 @@ export default function AnalyzeTickerPage({
         indicator_snapshot: data as unknown as Record<string, unknown>,
       })
       setSaved(true)
-    } catch {
-      // Error is silently handled; the button state resets
+      toast.success(`${data.ticker} saved as idea`)
+    } catch (err) {
+      const { message } = categorizeError(err)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
   }
 
+  const errorInfo = error ? categorizeError(error) : null
+
   return (
     <div className="space-y-6">
       {/* Top row: Ticker input + Grade + Score */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <TickerInput
           onAnalyze={handleAnalyze}
           loading={isLoading}
@@ -93,42 +102,76 @@ export default function AnalyzeTickerPage({
             <GradeBadge grade={data.green_flag.grade} size="lg" />
           </div>
         )}
+        {isLoading && (
+          <div className="flex items-center gap-3">
+            <div className="text-right space-y-1">
+              <Skeleton className="h-3 w-8 ml-auto" />
+              <Skeleton className="h-6 w-12 ml-auto" />
+            </div>
+            <Skeleton className="h-8 w-12 rounded-md" />
+          </div>
+        )}
       </div>
 
-      {/* Loading state */}
+      {/* Loading skeleton */}
       {isLoading && (
-        <div className="flex flex-col items-center justify-center gap-3 py-20">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Analyzing {ticker.toUpperCase()}...
-          </p>
-        </div>
+        <>
+          <IndicatorPanelSkeleton />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="bg-card/50 border-border/50">
+              <CardHeader className="pb-3">
+                <Skeleton className="h-4 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="size-4 rounded" />
+                    <Skeleton className="h-3.5 w-40" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            <div className="space-y-4">
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader className="pb-3">
+                  <Skeleton className="h-4 w-28" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </CardContent>
+              </Card>
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader className="pb-3">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Error state */}
       {error && !isLoading && (
-        <div className="flex flex-col items-center justify-center gap-2 py-20">
-          <p className="text-sm text-red-400">
-            Failed to load analysis for {ticker.toUpperCase()}.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Check that the ticker is valid and the API is running.
-          </p>
-        </div>
+        <ErrorDisplay
+          message={errorInfo?.code === "BAD_REQUEST"
+            ? `Invalid ticker "${ticker.toUpperCase()}"`
+            : userMessage(errorInfo?.code ?? "UNKNOWN")}
+          detail={errorInfo?.message}
+          onRetry={() => refresh()}
+        />
       )}
 
       {/* Data loaded */}
       {data && !isLoading && (
         <>
-          {/* Indicator panel (4-card grid) */}
           <IndicatorPanel data={data} />
 
-          {/* Third row: Green Flag + Phase/Ribbon */}
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* Left: Green Flag Checklist */}
             <GreenFlagChecklist greenFlag={data.green_flag} />
 
-            {/* Right: Phase Gauge + Ribbon Indicator stacked */}
             <div className="space-y-4">
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-3">
@@ -153,7 +196,6 @@ export default function AnalyzeTickerPage({
             </div>
           </div>
 
-          {/* Save as Idea button */}
           <div className="flex justify-end">
             <Button
               onClick={handleSaveIdea}

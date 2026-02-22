@@ -53,7 +53,7 @@ export function TickerInput({
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       {/* Ticker input */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full sm:w-auto">
         <label className="text-xs font-medium text-muted-foreground">
           Ticker
         </label>
@@ -62,18 +62,18 @@ export function TickerInput({
           placeholder="SPY"
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
-          className="h-9 w-28 font-mono text-sm uppercase"
+          className="h-9 w-full sm:w-28 font-mono text-sm uppercase"
           disabled={loading}
         />
       </div>
 
       {/* Timeframe select */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-6px)] sm:w-auto">
         <label className="text-xs font-medium text-muted-foreground">
           Timeframe
         </label>
         <Select value={timeframe} onValueChange={setTimeframe} disabled={loading}>
-          <SelectTrigger className="h-9 w-20">
+          <SelectTrigger className="h-9 w-full sm:w-20">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -87,12 +87,12 @@ export function TickerInput({
       </div>
 
       {/* Direction select */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-[calc(50%-6px)] sm:w-auto">
         <label className="text-xs font-medium text-muted-foreground">
           Direction
         </label>
         <Select value={direction} onValueChange={setDirection} disabled={loading}>
-          <SelectTrigger className="h-9 w-28">
+          <SelectTrigger className="h-9 w-full sm:w-28">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -106,7 +106,7 @@ export function TickerInput({
       </div>
 
       {/* Analyze button */}
-      <Button type="submit" disabled={loading || !ticker.trim()} className="h-9">
+      <Button type="submit" disabled={loading || !ticker.trim()} className="h-9 w-full sm:w-auto">
         {loading ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (

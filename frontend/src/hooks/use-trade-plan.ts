@@ -2,28 +2,44 @@
 
 import useSWR from 'swr';
 import type { TradePlanResponse } from '@/lib/types';
+import { ApiError, type ErrorCode } from '@/lib/errors';
 
-const fetcher = (url: string, body: unknown) =>
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(res => {
-    if (!res.ok) throw new Error('Failed to fetch trade plan');
-    return res.json();
-  });
+const fetcher = async (url: string, body: unknown) => {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Network error — check your connection');
+  }
+
+  if (!res.ok) {
+    let code: ErrorCode = 'UNKNOWN';
+    let detail = 'Failed to fetch trade plan';
+    try {
+      const err = await res.json();
+      code = err.code ?? (res.status >= 500 ? 'UPSTREAM_ERROR' : 'BAD_REQUEST');
+      detail = err.error ?? detail;
+    } catch { /* use defaults */ }
+    throw new ApiError(res.status, code, detail);
+  }
+
+  return res.json();
+};
 
 export function useTradePlan(
   ticker: string | null,
   timeframe: string = '5m',
   direction: string = 'bullish'
 ) {
-  // Use SWR with POST - key is null when no ticker
   const { data, error, isLoading, mutate } = useSWR<TradePlanResponse>(
     ticker ? ['/api/satyland/trade-plan', ticker, timeframe, direction] : null,
     ([url]) => fetcher(url as string, { ticker, timeframe, direction }),
     { refreshInterval: 60000 }
   );
 
-  return { data, error, isLoading, refresh: mutate };
+  return { data, error: error as ApiError | undefined, isLoading, refresh: mutate };
 }

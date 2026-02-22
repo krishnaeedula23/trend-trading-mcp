@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CalculateResponse, TradePlanResponse } from "./types";
+import { RailwayError } from "./errors";
 
 function getBaseUrl(): string {
   const url = process.env.RAILWAY_API_URL;
@@ -42,7 +43,7 @@ export async function railwayFetch(
     } catch {
       detail = res.statusText;
     }
-    throw new Error(`Railway API error ${res.status} on ${path}: ${detail}`);
+    throw new RailwayError(res.status, detail, path);
   }
 
   return res;

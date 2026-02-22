@@ -2,8 +2,20 @@
 
 import useSWR from 'swr';
 import type { Idea } from '@/lib/types';
+import { ApiError } from '@/lib/errors';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+async function fetcher(url: string): Promise<Idea[]> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    let detail = 'Failed to load ideas';
+    try {
+      const err = await res.json();
+      detail = err.error ?? detail;
+    } catch { /* use default */ }
+    throw new ApiError(res.status, res.status >= 500 ? 'UPSTREAM_ERROR' : 'BAD_REQUEST', detail);
+  }
+  return res.json();
+}
 
 export function useIdeas(status?: string) {
   const params = new URLSearchParams();
@@ -25,7 +37,14 @@ export async function createIdea(idea: Partial<Idea>): Promise<Idea> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(idea),
   });
-  if (!res.ok) throw new Error('Failed to create idea');
+  if (!res.ok) {
+    let detail = 'Failed to create idea';
+    try {
+      const err = await res.json();
+      detail = err.error ?? detail;
+    } catch { /* use default */ }
+    throw new ApiError(res.status, 'UPSTREAM_ERROR', detail);
+  }
   return res.json();
 }
 
@@ -35,11 +54,25 @@ export async function updateIdea(id: string, updates: Partial<Idea>): Promise<Id
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  if (!res.ok) throw new Error('Failed to update idea');
+  if (!res.ok) {
+    let detail = 'Failed to update idea';
+    try {
+      const err = await res.json();
+      detail = err.error ?? detail;
+    } catch { /* use default */ }
+    throw new ApiError(res.status, 'UPSTREAM_ERROR', detail);
+  }
   return res.json();
 }
 
 export async function deleteIdea(id: string): Promise<void> {
   const res = await fetch(`/api/ideas/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete idea');
+  if (!res.ok) {
+    let detail = 'Failed to delete idea';
+    try {
+      const err = await res.json();
+      detail = err.error ?? detail;
+    } catch { /* use default */ }
+    throw new ApiError(res.status, 'UPSTREAM_ERROR', detail);
+  }
 }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { Eye, Zap, Target, ArrowRight } from "lucide-react"
+import { toast } from "sonner"
 import {
   Card,
   CardContent,
@@ -11,7 +12,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { TickerInput } from "@/components/analysis/ticker-input"
 import { IdeaCard } from "@/components/ideas/idea-card"
+import { IdeaCardSkeleton } from "@/components/skeletons/idea-card-skeleton"
+import { StatCardSkeleton } from "@/components/skeletons/stat-card-skeleton"
 import { useIdeas, updateIdea, deleteIdea } from "@/hooks/use-ideas"
+import { useWatchlists, createWatchlist, updateWatchlist, deleteWatchlist } from "@/hooks/use-watchlists"
+import { useBatchCalculate } from "@/hooks/use-batch-calculate"
+import { WatchlistCard, WatchlistEmptyState } from "@/components/watchlist/watchlist-card"
 import Link from "next/link"
 
 function StatCard({
@@ -45,22 +51,31 @@ function StatCard({
 export default function DashboardPage() {
   const router = useRouter()
 
-  const { ideas: activeIdeas, refresh: refreshActive } = useIdeas("active")
-  const { ideas: watchingIdeas } = useIdeas("watching")
-  const { ideas: triggeredIdeas } = useIdeas("triggered")
+  const { ideas: activeIdeas, isLoading: loadingActive, refresh: refreshActive } = useIdeas("active")
+  const { ideas: watchingIdeas, isLoading: loadingWatching } = useIdeas("watching")
+  const { ideas: triggeredIdeas, isLoading: loadingTriggered } = useIdeas("triggered")
+  const { watchlists, refresh: refreshWatchlists } = useWatchlists()
+
+  // Collect all unique tickers from all watchlists for batch calculation
+  const allWatchlistTickers = [...new Set(watchlists.flatMap((wl) => wl.tickers))]
+  const { results: batchResults } = useBatchCalculate(allWatchlistTickers)
+
+  const statsLoading = loadingActive || loadingWatching || loadingTriggered
 
   async function handleStatusChange(id: string, newStatus: string) {
     try {
       if (newStatus === "delete") {
         await deleteIdea(id)
+        toast.success("Idea deleted")
       } else {
         await updateIdea(id, {
           status: newStatus as "watching" | "active" | "triggered" | "closed" | "expired",
         })
+        toast.success(`Idea marked as ${newStatus}`)
       }
       refreshActive()
-    } catch {
-      // Silently handle error
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update idea")
     }
   }
 
@@ -81,24 +96,67 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Active Ideas"
-          count={activeIdeas.length}
-          icon={Zap}
-          color="bg-blue-600"
-        />
-        <StatCard
-          label="Watching"
-          count={watchingIdeas.length}
-          icon={Eye}
-          color="bg-zinc-600"
-        />
-        <StatCard
-          label="Triggered"
-          count={triggeredIdeas.length}
-          icon={Target}
-          color="bg-emerald-600"
-        />
+        {statsLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <StatCard
+              label="Active Ideas"
+              count={activeIdeas.length}
+              icon={Zap}
+              color="bg-blue-600"
+            />
+            <StatCard
+              label="Watching"
+              count={watchingIdeas.length}
+              icon={Eye}
+              color="bg-zinc-600"
+            />
+            <StatCard
+              label="Triggered"
+              count={triggeredIdeas.length}
+              icon={Target}
+              color="bg-emerald-600"
+            />
+          </>
+        )}
+      </div>
+
+      {/* Watchlists */}
+      <div className="space-y-4">
+        <h2 className="text-base font-semibold">Watchlists</h2>
+        {watchlists.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {watchlists.map((wl) => (
+              <WatchlistCard
+                key={wl.id}
+                watchlist={wl}
+                batchResults={batchResults.filter((r) =>
+                  wl.tickers.includes(r.ticker)
+                )}
+                onUpdate={updateWatchlist}
+                onDelete={deleteWatchlist}
+                onRefresh={refreshWatchlists}
+              />
+            ))}
+          </div>
+        ) : (
+          <WatchlistEmptyState
+            onCreate={async () => {
+              try {
+                await createWatchlist("My Watchlist", [])
+                toast.success("Watchlist created")
+                refreshWatchlists()
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Failed to create watchlist")
+              }
+            }}
+          />
+        )}
       </div>
 
       {/* Active Ideas */}
@@ -113,7 +171,13 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {activeIdeas.length > 0 ? (
+        {loadingActive ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <IdeaCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : activeIdeas.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {activeIdeas.map((idea) => (
               <IdeaCard

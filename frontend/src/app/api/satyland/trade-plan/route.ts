@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { railwayFetch } from '@/lib/railway';
+import { RailwayError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
 
     if (!ticker) {
       return NextResponse.json(
-        { error: 'ticker is required' },
+        { error: 'ticker is required', code: 'BAD_REQUEST' },
         { status: 400 }
       );
     }
@@ -20,14 +21,6 @@ export async function POST(request: NextRequest) {
       vix: vix ?? undefined,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return NextResponse.json(
-        { error: `Railway API error: ${response.status}`, details: errorText },
-        { status: response.status }
-      );
-    }
-
     const data = await response.json();
 
     return NextResponse.json(data, {
@@ -36,10 +29,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof RailwayError) {
+      return NextResponse.json(
+        { error: error.detail, code: error.code },
+        { status: error.status }
+      );
+    }
     console.error('Satyland trade-plan error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'Backend unavailable', code: 'NETWORK_ERROR' },
+      { status: 502 }
     );
   }
 }

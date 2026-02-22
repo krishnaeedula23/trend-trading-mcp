@@ -5,18 +5,27 @@ import { RailwayError } from '@/lib/errors';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ticker, timeframe } = body;
+    const { tickers, timeframe, direction, trading_mode } = body;
 
-    if (!ticker) {
+    if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
       return NextResponse.json(
-        { error: 'ticker is required', code: 'BAD_REQUEST' },
+        { error: 'tickers array is required', code: 'BAD_REQUEST' },
         { status: 400 }
       );
     }
 
-    const response = await railwayFetch('/api/satyland/calculate', {
-      ticker,
+    if (tickers.length > 20) {
+      return NextResponse.json(
+        { error: 'Maximum 20 tickers allowed', code: 'BAD_REQUEST' },
+        { status: 400 }
+      );
+    }
+
+    const response = await railwayFetch('/api/satyland/batch-calculate', {
+      tickers,
       timeframe: timeframe || '5m',
+      direction: direction || 'bullish',
+      trading_mode: trading_mode ?? undefined,
     });
 
     const data = await response.json();
@@ -33,7 +42,7 @@ export async function POST(request: NextRequest) {
         { status: error.status }
       );
     }
-    console.error('Satyland calculate error:', error);
+    console.error('Batch calculate error:', error);
     return NextResponse.json(
       { error: 'Backend unavailable', code: 'NETWORK_ERROR' },
       { status: 502 }

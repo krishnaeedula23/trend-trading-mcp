@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { ArrowUp, ArrowDown, MoreHorizontal, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -73,6 +74,7 @@ interface IdeaCardProps {
 
 export function IdeaCard({ idea, onStatusChange }: IdeaCardProps) {
   return (
+    <Link href={`/ideas/${idea.id}`} className="block">
     <Card className="bg-card/50 border-border/50 hover:border-border transition-colors">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
@@ -132,33 +134,33 @@ export function IdeaCard({ idea, onStatusChange }: IdeaCardProps) {
 
             {/* Actions dropdown */}
             {onStatusChange && (
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
+                  <Button variant="ghost" size="icon-xs" onClick={(e) => e.preventDefault()}>
                     <MoreHorizontal className="size-3.5" />
                     <span className="sr-only">Actions</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-36">
                   <DropdownMenuItem
-                    onClick={() => onStatusChange(idea.id, "active")}
+                    onClick={(e) => { e.preventDefault(); onStatusChange(idea.id, "active") }}
                   >
                     Mark Active
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => onStatusChange(idea.id, "triggered")}
+                    onClick={(e) => { e.preventDefault(); onStatusChange(idea.id, "triggered") }}
                   >
                     Mark Triggered
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => onStatusChange(idea.id, "closed")}
+                    onClick={(e) => { e.preventDefault(); onStatusChange(idea.id, "closed") }}
                   >
                     Close
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     variant="destructive"
-                    onClick={() => onStatusChange(idea.id, "delete")}
+                    onClick={(e) => { e.preventDefault(); onStatusChange(idea.id, "delete") }}
                   >
                     Delete
                   </DropdownMenuItem>
@@ -175,5 +177,6 @@ export function IdeaCard({ idea, onStatusChange }: IdeaCardProps) {
         </div>
       </CardContent>
     </Card>
+    </Link>
   )
 }
