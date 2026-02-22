@@ -79,3 +79,4 @@ ta-lib-0.4.0-src.tar.gz
 
 # Claude Code local overrides
 .claude.local.md
+.vercel

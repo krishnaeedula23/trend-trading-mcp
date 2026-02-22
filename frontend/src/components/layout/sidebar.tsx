@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Search,
   Lightbulb,
+  List,
   Bell,
   TrendingUp,
   Menu,
@@ -27,6 +28,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Analyze", href: "/analyze", icon: Search },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
+  { label: "Watchlists", href: "/watchlists", icon: List },
   { label: "Alerts", href: "/alerts", icon: Bell, badge: "Soon" },
 ] as const
 
