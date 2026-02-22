@@ -10,6 +10,7 @@ from typing import Literal
 import pandas as pd
 import yfinance as yf
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from api.indicators.satyland.atr_levels import atr_levels
@@ -108,15 +109,18 @@ async def calculate_indicators(req: CalculateRequest):
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
 
-        return {
-            "ticker":           req.ticker.upper(),
-            "timeframe":        req.timeframe,
-            "bars":             len(intraday_df),
-            "daily_bars":       len(daily_df),
-            "atr_levels":       atr,
-            "pivot_ribbon":     ribbon,
-            "phase_oscillator": phase,
-        }
+        return JSONResponse(
+            content={
+                "ticker":           req.ticker.upper(),
+                "timeframe":        req.timeframe,
+                "bars":             len(intraday_df),
+                "daily_bars":       len(daily_df),
+                "atr_levels":       atr,
+                "pivot_ribbon":     ribbon,
+                "phase_oscillator": phase,
+            },
+            headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Calculation failed: {exc}") from exc
 
@@ -142,17 +146,20 @@ async def trade_plan(req: TradePlanRequest):
         struct = price_structure(daily_df)
         flags  = green_flag_checklist(atr, ribbon, phase, struct, req.direction, req.vix)
 
-        return {
-            "ticker":           req.ticker.upper(),
-            "timeframe":        req.timeframe,
-            "direction":        req.direction,
-            "bars":             len(intraday_df),
-            "atr_levels":       atr,
-            "pivot_ribbon":     ribbon,
-            "phase_oscillator": phase,
-            "price_structure":  struct,
-            "green_flag":       flags,
-        }
+        return JSONResponse(
+            content={
+                "ticker":           req.ticker.upper(),
+                "timeframe":        req.timeframe,
+                "direction":        req.direction,
+                "bars":             len(intraday_df),
+                "atr_levels":       atr,
+                "pivot_ribbon":     ribbon,
+                "phase_oscillator": phase,
+                "price_structure":  struct,
+                "green_flag":       flags,
+            },
+            headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Trade plan failed: {exc}") from exc
 
@@ -162,6 +169,9 @@ async def get_price_structure(req: CalculateRequest):
     """Return PDH / PDL / PDC and structural bias from daily data."""
     try:
         daily_df = _fetch_daily(req.ticker)
-        return {"ticker": req.ticker.upper(), **price_structure(daily_df)}
+        return JSONResponse(
+            content={"ticker": req.ticker.upper(), **price_structure(daily_df)},
+            headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
