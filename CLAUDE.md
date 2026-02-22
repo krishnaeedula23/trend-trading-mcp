@@ -3,6 +3,9 @@
 ## Quick Start
 
 ```bash
+# First-time setup
+make setup                    # Creates venv, installs deps, seeds DB
+
 # Maverick MCP (port 8003)
 make dev                  # SSE transport (recommended)
 
@@ -33,7 +36,9 @@ Maverick (WHAT to trade) → Saty (WHEN to trade it)
 ```
 maverick_mcp/
 ├── api/server.py              # FastMCP server
-├── api/routers/               # Tool groups (data, technical, screening, portfolio, research, backtesting)
+├── api/routers/               # Tool groups (25 routers: data, technical, screening, portfolio, research, backtesting, ...)
+├── agents/, workflows/        # Multi-agent orchestration
+├── domain/, infrastructure/   # DDD layers
 ├── config/, core/, data/, providers/, utils/, validation/
 
 api/
@@ -50,6 +55,10 @@ api/
 │   └── price_structure.py     # PDH/PDL/PMH/PML
 └── integrations/schwab/       # OAuth2 + token refresh
 
+conductor/                     # Product guidelines & workflow orchestration
+scripts/                       # Utility scripts (seed_sp500.py, schwab_auth.py, dev.sh, etc.)
+alembic/                       # DB migrations (18 versions)
+examples/                      # Usage examples
 tests/satyland/                # 115 tests, no external deps
 docs/saty_trading_skill.md     # Full Saty reference
 docs/*.txt                     # Pine Script ground truth
@@ -69,6 +78,9 @@ EXA_API_KEY=...                # Web search for research
 FRED_API_KEY=...               # Macro data
 DATABASE_URL=postgresql://...  # Default: SQLite
 REDIS_HOST=localhost           # Default: in-memory cache
+TAVILY_API_KEY=...             # Alternative web search
+SENTRY_DSN=...                 # Error tracking
+CACHE_TTL_SECONDS=300          # Cache expiry (default: 300)
 
 # Saty/Schwab
 SCHWAB_CLIENT_ID=...
@@ -117,58 +129,15 @@ Claude Code CLI: `claude mcp add --transport sse maverick-mcp http://localhost:8
 
 > Full reference: `docs/saty_trading_skill.md` | Pine Script ground truth: `docs/*.txt`
 
-### ATR Levels (`atr_levels.py`)
+| Indicator | File | Key Output |
+|-----------|------|------------|
+| ATR Levels | `atr_levels.py` | `pdc`, `atr`, `call_trigger`, `put_trigger`, `levels` (Fib dict), `atr_status`, `trigger_box`, `trend` |
+| Pivot Ribbon | `pivot_ribbon.py` | `ribbon_state`, `bias_candle` (green/blue/orange/red/gray), `in_compression`, `conviction_arrow`, `above_200ema` |
+| Phase Oscillator | `phase_oscillator.py` | `oscillator`, `phase` (green/red/compression), `current_zone`, `zone_crosses` |
+| Green Flag | `green_flag.py` | 10 flags -> score -> grade (A+ >= 5 / A = 4 / B = 3 / skip < 3) |
+| Price Structure | `price_structure.py` | PDH/PDL/PMH/PML levels |
 
-PDC-anchored Fibonacci levels using Wilder ATR14. ATR and PDC from `iloc[-2]` (previous settled bar).
-
-| Key | Description |
-|---|---|
-| `pdc` | Previous Day Close (zero line) |
-| `atr` | Wilder ATR14 from previous bar |
-| `call_trigger` | PDC + 0.236 x ATR (bullish GO) |
-| `put_trigger` | PDC - 0.236 x ATR (bearish GO) |
-| `levels` | Full Fibonacci dict (trigger/golden_gate/mid_50/mid_range/fib_786/full_range x bull/bear) |
-| `atr_status` | `green` <= 70%, `orange` 70-90%, `red` >= 90% |
-| `trigger_box` | `{inside: bool}` — Chopzilla zone |
-| `trend` | EMA 8/21/34 stack: `bullish`/`bearish`/`neutral` |
-
-### Pivot Ribbon Pro (`pivot_ribbon.py`)
-
-EMAs: 8 (fast), 13 (conviction), 21 (pivot center), 48 (bias), 200 (macro).
-
-| Key | Description |
-|---|---|
-| `ribbon_state` | `bullish` (8>21>48) / `bearish` (8<21<48) / `chopzilla` |
-| `bias_candle` | `green`/`blue` (BUY PULLBACK)/`orange` (SHORT)/`red`/`gray` |
-| `in_compression` | 2.0 x ATR14 threshold (NOT LazyBear BB-inside-KC) |
-| `conviction_arrow` | EMA13 x EMA48 crossover signal |
-| `above_200ema` | Macro regime filter |
-
-**Entry rule**: Wait for blue (bullish pullback) or orange (bearish pullback). Never enter green/red.
-
-### Phase Oscillator (`phase_oscillator.py`)
-
-```
-oscillator = EMA3(((close - EMA21) / (3.0 x ATR14)) x 100)
-```
-
-| Key | Description |
-|---|---|
-| `oscillator` / `oscillator_prev` | Current/previous value |
-| `phase` | `green` (>=0) / `red` (<0) / `compression` |
-| `current_zone` | extreme_up/down (+-100), distribution/accumulation (+-61.8), neutral (+-23.6) |
-| `zone_crosses` | Mean reversion signals |
-
-### Green Flag (`green_flag.py`)
-
-10 flags: trend_ribbon_stacked, price_above/below_cloud (EMA48), trigger_hit, structure_confirmed (PDH/PDL/PMH/PML), mtf_aligned (200EMA), momentum_confirmed, squeeze, atr_room_ok, vix_bias, confluence_bonus.
-
-| Score | Grade | Action |
-|---|---|---|
-| >= 5 | A+ | Full size |
-| 4 | A | Standard size |
-| 3 | B | Reduce / wait |
-| < 3 | skip | No trade |
+**Entry rule**: Wait for blue (bullish pullback) or orange (bearish pullback) bias_candle. Never enter green/red.
 
 ### Saty API Endpoints
 
