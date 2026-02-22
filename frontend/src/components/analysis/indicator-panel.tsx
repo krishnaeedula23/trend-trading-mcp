@@ -14,6 +14,7 @@ import type {
   RibbonState,
   Phase,
   StructuralBias,
+  ConvictionArrow,
 } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -237,8 +238,30 @@ function RibbonCard({ data }: { data: TradePlanResponse }) {
             )
           }
         />
+        <DataRow
+          label="13/48 Conviction"
+          value={convictionLabel(ribbon.conviction_arrow)}
+        />
       </CardContent>
     </Card>
+  )
+}
+
+function convictionLabel(arrow: ConvictionArrow): React.ReactNode {
+  if (!arrow) {
+    return <span className="text-xs text-muted-foreground">--</span>
+  }
+  if (arrow === "bullish_crossover") {
+    return (
+      <Badge className="text-[10px] bg-emerald-600/20 text-emerald-400 border-emerald-600/30">
+        BULLISH CROSS
+      </Badge>
+    )
+  }
+  return (
+    <Badge className="text-[10px] bg-red-600/20 text-red-400 border-red-600/30">
+      BEARISH CROSS
+    </Badge>
   )
 }
 

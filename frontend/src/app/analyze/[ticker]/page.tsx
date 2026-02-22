@@ -8,15 +8,12 @@ import { TickerInput } from "@/components/analysis/ticker-input"
 import { IndicatorPanel } from "@/components/analysis/indicator-panel"
 import { GreenFlagChecklist } from "@/components/analysis/green-flag-checklist"
 import { GradeBadge } from "@/components/ideas/grade-badge"
-import { PhaseGauge } from "@/components/charts/phase-gauge"
-import { RibbonIndicator } from "@/components/charts/ribbon-indicator"
 import { IndicatorPanelSkeleton } from "@/components/skeletons/indicator-panel-skeleton"
 import { ErrorDisplay } from "@/components/ui/error-display"
 import { useTradePlan } from "@/hooks/use-trade-plan"
 import { createIdea } from "@/hooks/use-ideas"
 import { categorizeError, userMessage } from "@/lib/errors"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function AnalyzeTickerPage({
@@ -114,44 +111,7 @@ export default function AnalyzeTickerPage({
       </div>
 
       {/* Loading skeleton */}
-      {isLoading && (
-        <>
-          <IndicatorPanelSkeleton />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="bg-card/50 border-border/50">
-              <CardHeader className="pb-3">
-                <Skeleton className="h-4 w-32" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Skeleton className="size-4 rounded" />
-                    <Skeleton className="h-3.5 w-40" />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <div className="space-y-4">
-              <Card className="bg-card/50 border-border/50">
-                <CardHeader className="pb-3">
-                  <Skeleton className="h-4 w-28" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-16 w-full rounded-lg" />
-                </CardContent>
-              </Card>
-              <Card className="bg-card/50 border-border/50">
-                <CardHeader className="pb-3">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </>
-      )}
+      {isLoading && <IndicatorPanelSkeleton />}
 
       {/* Error state */}
       {error && !isLoading && (
@@ -169,32 +129,7 @@ export default function AnalyzeTickerPage({
         <>
           <IndicatorPanel data={data} />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <GreenFlagChecklist greenFlag={data.green_flag} />
-
-            <div className="space-y-4">
-              <Card className="bg-card/50 border-border/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Phase Oscillator</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <PhaseGauge
-                    oscillator={data.phase_oscillator.oscillator}
-                    phase={data.phase_oscillator.phase}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card/50 border-border/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Pivot Ribbon</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <RibbonIndicator ribbon={data.pivot_ribbon} />
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <GreenFlagChecklist greenFlag={data.green_flag} />
 
           <div className="flex justify-end">
             <Button
