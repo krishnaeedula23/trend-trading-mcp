@@ -618,39 +618,87 @@ function MtfPhaseRow({
   )
 }
 
+function getPivotAlignment(
+  ps: TradePlanResponse["price_structure"],
+  kp: TradePlanResponse["key_pivots"],
+): { label: string; color: string; greenCount: number; total: number } {
+  // Check stacking: PDC >= PWC >= PMoC >= PQC >= PYC
+  const pivots: (number | null | undefined)[] = [
+    ps.pdc, kp?.pwc, kp?.pmoc, kp?.pqc, kp?.pyc,
+  ]
+  const valid = pivots.filter((v): v is number => v != null)
+  if (valid.length < 2) return { label: "N/A", color: "bg-zinc-600/20 text-zinc-400 border-zinc-600/30", greenCount: 0, total: 0 }
+
+  let greenCount = 0
+  for (let i = 0; i < valid.length - 1; i++) {
+    if (valid[i] >= valid[i + 1]) greenCount++
+  }
+  const total = valid.length - 1
+
+  if (greenCount === total) {
+    return { label: "ALIGNED", color: "bg-emerald-600/20 text-emerald-400 border-emerald-600/30", greenCount, total }
+  }
+  if (greenCount === 0) {
+    return { label: "BEARISH", color: "bg-red-600/20 text-red-400 border-red-600/30", greenCount, total }
+  }
+  return { label: "CHOPPY", color: "bg-amber-600/20 text-amber-400 border-amber-600/30", greenCount, total }
+}
+
 function PriceStructureCard({ data }: { data: TradePlanResponse }) {
   const ps = data.price_structure
   const kp = data.key_pivots
+  const alignment = getPivotAlignment(ps, kp)
+
+  // Build ordered pivot pairs for coloring: each pair checks higher >= lower TF
+  const pivotPairs: { value: number; nextValue: number | null }[] = []
+  const orderedPivots: (number | null | undefined)[] = [
+    ps.pdc, kp?.pwc, kp?.pmoc, kp?.pqc, kp?.pyc,
+  ]
+  for (let i = 0; i < orderedPivots.length; i++) {
+    const v = orderedPivots[i]
+    if (v == null) continue
+    const next = orderedPivots.slice(i + 1).find((n): n is number => n != null) ?? null
+    pivotPairs.push({ value: v, nextValue: next })
+  }
+
+  // Map each pivot value to green/red based on stacking with next lower TF
+  const pivotColor = (value: number | null | undefined): string => {
+    if (value == null) return "text-amber-400"
+    const pair = pivotPairs.find((p) => p.value === value)
+    if (!pair || pair.nextValue == null) return "text-emerald-400" // lowest TF or only pivot
+    return pair.value >= pair.nextValue ? "text-emerald-400" : "text-red-400"
+  }
+
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Price Structure</CardTitle>
-          <Badge
-            className={cn(
-              "text-[10px]",
-              structuralBiasColor(ps.structural_bias)
-            )}
-          >
-            {formatLabel(ps.structural_bias).toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge className={cn("text-[10px]", structuralBiasColor(ps.structural_bias))}>
+              {formatLabel(ps.structural_bias).toUpperCase()}
+            </Badge>
+            <Badge className={cn("text-[10px]", alignment.color)}>
+              {alignment.label}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
         <DataRow label="PDH" value={`$${fmt(ps.pdh)}`} />
         <DataRow label="PDL" value={`$${fmt(ps.pdl)}`} />
-        <PivotRow label="PDC Pivot" value={ps.pdc} />
+        <PivotRow label="PDC Pivot" value={ps.pdc} color={pivotColor(ps.pdc)} />
         <div className="my-2 h-px bg-border/50" />
         {kp?.pwh != null && <DataRow label="PWH" value={`$${fmt(kp.pwh)}`} />}
         {kp?.pwl != null && <DataRow label="PWL" value={`$${fmt(kp.pwl)}`} />}
-        {kp?.pwc != null && <PivotRow label="PWC Pivot" value={kp.pwc} />}
+        {kp?.pwc != null && <PivotRow label="PWC Pivot" value={kp.pwc} color={pivotColor(kp.pwc)} />}
         <div className="my-2 h-px bg-border/50" />
         {kp?.pmoh != null && <DataRow label="Prev Mo High" value={`$${fmt(kp.pmoh)}`} />}
         {kp?.pmol != null && <DataRow label="Prev Mo Low" value={`$${fmt(kp.pmol)}`} />}
-        {kp?.pmoc != null && <PivotRow label="Prev Mo Pivot" value={kp.pmoc} />}
+        {kp?.pmoc != null && <PivotRow label="Prev Mo Pivot" value={kp.pmoc} color={pivotColor(kp.pmoc)} />}
         <div className="my-2 h-px bg-border/50" />
-        {kp?.pqc != null && <PivotRow label="Prev Qtr Pivot" value={kp.pqc} />}
-        {kp?.pyc != null && <PivotRow label="Prev Yr Pivot" value={kp.pyc} />}
+        {kp?.pqc != null && <PivotRow label="Prev Qtr Pivot" value={kp.pqc} color={pivotColor(kp.pqc)} />}
+        {kp?.pyc != null && <PivotRow label="Prev Yr Pivot" value={kp.pyc} color={pivotColor(kp.pyc)} />}
         <div className="my-2 h-px bg-border/50" />
         <DataRow label="Gap" value={formatLabel(ps.gap_scenario)} />
       </CardContent>
@@ -658,12 +706,12 @@ function PriceStructureCard({ data }: { data: TradePlanResponse }) {
   )
 }
 
-function PivotRow({ label, value }: { label: string; value: number | null }) {
+function PivotRow({ label, value, color }: { label: string; value: number | null; color?: string }) {
   if (value == null) return null
   return (
     <div className="flex items-center justify-between text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono font-medium text-amber-400">${fmt(value)}</span>
+      <span className={cn("font-mono font-medium", color ?? "text-amber-400")}>${fmt(value)}</span>
     </div>
   )
 }
