@@ -129,19 +129,36 @@ const MODE_PDC_LABEL: Record<string, string> = {
   position: "Prev Quarter Close",
 }
 
+const MODE_PDC_LABEL_CC: Record<string, string> = {
+  day: "Day Close",
+  multiday: "Week Close",
+  swing: "Month Close",
+  position: "Quarter Close",
+}
+
 function AtrCard({ data }: { data: TradePlanResponse }) {
   const atr = data.atr_levels
+  const ucc = data.use_current_close
   const modeLabel = atr.trading_mode_label || "Day"
   const atrLabel = MODE_ATR_LABEL[atr.trading_mode] || "ATR(14)"
-  const pdcLabel = MODE_PDC_LABEL[atr.trading_mode] || "PDC"
+  const pdcLabel = ucc
+    ? (MODE_PDC_LABEL_CC[atr.trading_mode] || "Close")
+    : (MODE_PDC_LABEL[atr.trading_mode] || "PDC")
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">{modeLabel} Levels</CardTitle>
-          <Badge className={cn("text-[10px]", atrStatusColor(atr.atr_status))}>
-            {atr.atr_status.toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {ucc && (
+              <Badge className="text-[10px] bg-blue-600/20 text-blue-400 border-blue-600/30">
+                CURRENT CLOSE
+              </Badge>
+            )}
+            <Badge className={cn("text-[10px]", atrStatusColor(atr.atr_status))}>
+              {atr.atr_status.toUpperCase()}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">

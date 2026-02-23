@@ -24,6 +24,7 @@ from api.indicators.satyland.green_flag import green_flag_checklist
 from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.satyland.pivot_ribbon import pivot_ribbon
 from api.indicators.satyland.price_structure import price_structure, key_pivots
+from api.utils.market_hours import resolve_use_current_close
 
 router = APIRouter(prefix="/api/satyland", tags=["satyland"])
 
@@ -67,6 +68,9 @@ class CalculateRequest(BaseModel):
     )
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False, description="Include Valhalla extension levels beyond 100%")
+    use_current_close: bool | None = Field(
+        None, description="Anchor at current bar (True) or previous bar (False). Auto-detects from market hours if None."
+    )
 
 
 class BatchCalculateRequest(BaseModel):
@@ -75,6 +79,7 @@ class BatchCalculateRequest(BaseModel):
     direction: Literal["bullish", "bearish"] = Field("bullish")
     trading_mode: Literal["day", "multiday", "swing", "position"] | None = Field(None)
     atr_period: int = Field(14, ge=5, le=50)
+    use_current_close: bool | None = Field(None)
 
 
 class TradePlanRequest(BaseModel):
@@ -87,6 +92,7 @@ class TradePlanRequest(BaseModel):
     vix: float | None = Field(None, description="Current VIX level for bias filter")
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False)
+    use_current_close: bool | None = Field(None)
 
 
 def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -187,6 +193,7 @@ async def calculate_indicators(req: CalculateRequest):
     use the requested chart timeframe.
     """
     mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
+    ucc = resolve_use_current_close(req.use_current_close)
     try:
         atr_source_df = _fetch_atr_source(req.ticker, mode)
         intraday_df   = _fetch_intraday(req.ticker, req.timeframe)
@@ -197,7 +204,8 @@ async def calculate_indicators(req: CalculateRequest):
         atr    = atr_levels(atr_source_df, intraday_df=intraday_df,
                             atr_period=req.atr_period,
                             include_extensions=req.include_extensions,
-                            trading_mode=mode)
+                            trading_mode=mode,
+                            use_current_close=ucc)
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
 
@@ -206,6 +214,7 @@ async def calculate_indicators(req: CalculateRequest):
                 "ticker":           req.ticker.upper(),
                 "timeframe":        req.timeframe,
                 "trading_mode":     mode,
+                "use_current_close": ucc,
                 "bars":             len(intraday_df),
                 "atr_source_bars":  len(atr_source_df),
                 "atr_levels":       atr,
@@ -262,6 +271,7 @@ async def trade_plan(req: TradePlanRequest):
     daily data (PDH/PDL are inherently daily concepts).
     """
     mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
+    ucc = resolve_use_current_close(req.use_current_close)
     try:
         atr_source_df = _fetch_atr_source(req.ticker, mode)
         daily_df      = _fetch_daily(req.ticker) if mode != "day" else atr_source_df
@@ -274,11 +284,12 @@ async def trade_plan(req: TradePlanRequest):
         atr    = atr_levels(atr_source_df, intraday_df=intraday_df,
                             atr_period=req.atr_period,
                             include_extensions=req.include_extensions,
-                            trading_mode=mode)
+                            trading_mode=mode,
+                            use_current_close=ucc)
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
-        struct = price_structure(daily_df)
-        pivots = key_pivots(daily_long_df)
+        struct = price_structure(daily_df, use_current_close=ucc)
+        pivots = key_pivots(daily_long_df, use_current_close=ucc)
 
         # Fetch MTF ribbons and phases in parallel
         mtf_ribbons, mtf_phases = await asyncio.gather(
@@ -294,6 +305,7 @@ async def trade_plan(req: TradePlanRequest):
                 "ticker":           req.ticker.upper(),
                 "timeframe":        req.timeframe,
                 "trading_mode":     mode,
+                "use_current_close": ucc,
                 "direction":        req.direction,
                 "bars":             len(intraday_df),
                 "atr_levels":       atr,
@@ -331,6 +343,7 @@ async def batch_calculate(req: BatchCalculateRequest):
     Returns { results: [{ ticker, success, data?, error? }, ...] }.
     """
     mode = req.trading_mode or TIMEFRAME_TO_MODE.get(req.timeframe, "day")
+    ucc = resolve_use_current_close(req.use_current_close)
     sem = asyncio.Semaphore(5)
 
     async def process_one(ticker: str) -> dict:
@@ -342,11 +355,12 @@ async def batch_calculate(req: BatchCalculateRequest):
                 intraday_df = await asyncio.to_thread(_fetch_intraday, ticker, req.timeframe)
 
                 atr = atr_levels(atr_source_df, intraday_df=intraday_df,
-                                 atr_period=req.atr_period, trading_mode=mode)
+                                 atr_period=req.atr_period, trading_mode=mode,
+                                 use_current_close=ucc)
                 ribbon = pivot_ribbon(intraday_df)
                 phase = phase_oscillator(intraday_df)
-                struct = price_structure(daily_df)
-                pivots = key_pivots(daily_long_df)
+                struct = price_structure(daily_df, use_current_close=ucc)
+                pivots = key_pivots(daily_long_df, use_current_close=ucc)
                 mtf, mtf_ph = await asyncio.gather(
                     _fetch_mtf_ribbons(ticker, req.timeframe),
                     _fetch_mtf_phases(ticker, req.timeframe),
@@ -361,6 +375,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                         "ticker": ticker.upper(),
                         "timeframe": req.timeframe,
                         "trading_mode": mode,
+                        "use_current_close": ucc,
                         "direction": req.direction,
                         "atr_levels": atr,
                         "pivot_ribbon": ribbon,

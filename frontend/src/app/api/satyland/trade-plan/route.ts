@@ -5,7 +5,7 @@ import { RailwayError } from '@/lib/errors';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ticker, timeframe, direction, vix } = body;
+    const { ticker, timeframe, direction, vix, use_current_close } = body;
 
     if (!ticker) {
       return NextResponse.json(
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       timeframe: timeframe || '5m',
       direction: direction || 'bullish',
       vix: vix ?? undefined,
+      use_current_close: use_current_close ?? undefined,
     });
 
     const data = await response.json();

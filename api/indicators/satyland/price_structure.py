@@ -24,7 +24,8 @@ Bias Rules:
 import pandas as pd
 
 
-def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None) -> dict:
+def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None,
+                    use_current_close: bool = False) -> dict:
     """
     Compute PDH, PDL, and optionally PMH/PML.
 
@@ -32,6 +33,7 @@ def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None) 
         df:           Daily OHLCV DataFrame (at least 2 rows for previous day).
         premarket_df: Optional intraday DataFrame for the pre-market session
                       (4:00–9:30 AM ET). If None, PMH/PML are omitted.
+        use_current_close: When True, anchor at iloc[-1] instead of iloc[-2].
 
     Returns:
         dict with pdh, pdl, pdch (prev day close), pmh, pml, structural_bias,
@@ -40,7 +42,8 @@ def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None) 
     if len(df) < 2:
         return {"error": "Need at least 2 daily bars to compute structure levels"}
 
-    prev = df.iloc[-2]
+    anchor = -1 if use_current_close else -2
+    prev = df.iloc[anchor]
     curr_close = float(df["close"].iloc[-1])
 
     pdh  = float(prev["high"])
@@ -105,7 +108,7 @@ def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None) 
     return result
 
 
-def key_pivots(daily_df: pd.DataFrame) -> dict:
+def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
     """
     Compute key pivot levels from daily OHLCV data.
 
@@ -117,6 +120,7 @@ def key_pivots(daily_df: pd.DataFrame) -> dict:
     Requires at least ~400 daily bars (2y) for yearly pivot.
     Returns None for any level that can't be computed.
     """
+    anchor = -1 if use_current_close else -2
     result: dict = {}
 
     # Resample daily to weekly
@@ -124,7 +128,7 @@ def key_pivots(daily_df: pd.DataFrame) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(weekly) >= 2:
-        pw = weekly.iloc[-2]
+        pw = weekly.iloc[anchor]
         result["pwh"] = round(float(pw["high"]), 4)
         result["pwl"] = round(float(pw["low"]), 4)
         result["pwc"] = round(float(pw["close"]), 4)
@@ -136,7 +140,7 @@ def key_pivots(daily_df: pd.DataFrame) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(monthly) >= 2:
-        pm = monthly.iloc[-2]
+        pm = monthly.iloc[anchor]
         result["pmoh"] = round(float(pm["high"]), 4)
         result["pmol"] = round(float(pm["low"]), 4)
         result["pmoc"] = round(float(pm["close"]), 4)
@@ -148,7 +152,7 @@ def key_pivots(daily_df: pd.DataFrame) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(quarterly) >= 2:
-        result["pqc"] = round(float(quarterly.iloc[-2]["close"]), 4)
+        result["pqc"] = round(float(quarterly.iloc[anchor]["close"]), 4)
     else:
         result["pqc"] = None
 
@@ -157,7 +161,7 @@ def key_pivots(daily_df: pd.DataFrame) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(yearly) >= 2:
-        result["pyc"] = round(float(yearly.iloc[-2]["close"]), 4)
+        result["pyc"] = round(float(yearly.iloc[anchor]["close"]), 4)
     else:
         result["pyc"] = None
 

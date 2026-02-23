@@ -64,7 +64,8 @@ _EXT_FIBS = [
 
 def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
                atr_period: int = 14, include_extensions: bool = False,
-               trading_mode: str = "day") -> dict:
+               trading_mode: str = "day",
+               use_current_close: bool = False) -> dict:
     """
     Compute Saty ATR Levels from higher-timeframe OHLCV data.
 
@@ -78,6 +79,9 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
         include_extensions: Include Valhalla extension levels beyond 100%.
         trading_mode:      One of "day", "multiday", "swing", "position".
                            Controls the label shown in the response.
+        use_current_close: When True, anchor ATR/PDC at iloc[-1] (settled bar)
+                           instead of iloc[-2]. Pine: use_current_close shifts
+                           period_index from 1 to 0.
 
     Returns:
         Full ATR Levels dict matching Pine Script outputs.
@@ -86,11 +90,12 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
         raise ValueError("Need at least 2 daily bars")
 
     # ── ATR and PDC from source data ─────────────────────────────────────────
+    anchor = -1 if use_current_close else -2
     atr_series = _wilder_atr(daily_df, atr_period)
-    # Pine: ta.atr(14)[1] = previous bar's ATR (settled, not the forming bar)
-    atr = float(atr_series.iloc[-2])
-    # Pine: close[1] on the mode's timeframe = previous period's close
-    pdc = float(daily_df["close"].iloc[-2])
+    # Pine: ta.atr(14)[period_index] — settled bar's ATR
+    atr = float(atr_series.iloc[anchor])
+    # Pine: close[period_index] on the mode's timeframe
+    pdc = float(daily_df["close"].iloc[anchor])
     # Current forming bar
     today_high  = float(daily_df["high"].iloc[-1])
     today_low   = float(daily_df["low"].iloc[-1])
@@ -203,4 +208,5 @@ def atr_levels(daily_df: pd.DataFrame, intraday_df: pd.DataFrame | None = None,
         "trend":           trend,             # bullish / bearish / neutral
         "trading_mode":    trading_mode,
         "trading_mode_label": _MODE_LABELS.get(trading_mode, "Day"),
+        "use_current_close": use_current_close,
     }

@@ -38,6 +38,7 @@ export interface AtrLevels {
   trend: Trend;
   trading_mode: TradingMode;
   trading_mode_label: string;
+  use_current_close?: boolean;
 }
 
 // --- Pivot Ribbon ---
@@ -127,6 +128,7 @@ export interface CalculateResponse {
   ticker: string;
   timeframe: string;
   trading_mode: TradingMode;
+  use_current_close?: boolean;
   bars: number;
   atr_source_bars: number;
   atr_levels: AtrLevels;

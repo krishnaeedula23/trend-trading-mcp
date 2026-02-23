@@ -5,7 +5,7 @@ import { RailwayError } from '@/lib/errors';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ticker, timeframe } = body;
+    const { ticker, timeframe, use_current_close } = body;
 
     if (!ticker) {
       return NextResponse.json(
@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     const response = await railwayFetch('/api/satyland/calculate', {
       ticker,
       timeframe: timeframe || '5m',
+      use_current_close: use_current_close ?? undefined,
     });
 
     const data = await response.json();

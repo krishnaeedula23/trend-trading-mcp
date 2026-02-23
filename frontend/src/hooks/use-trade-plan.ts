@@ -33,11 +33,17 @@ const fetcher = async (url: string, body: unknown) => {
 export function useTradePlan(
   ticker: string | null,
   timeframe: string = '1d',
-  direction: string = 'bullish'
+  direction: string = 'bullish',
+  useCurrentClose?: boolean | null
 ) {
   const { data, error, isLoading, mutate } = useSWR<TradePlanResponse>(
-    ticker ? ['/api/satyland/trade-plan', ticker, timeframe, direction] : null,
-    ([url]) => fetcher(url as string, { ticker, timeframe, direction }),
+    ticker ? ['/api/satyland/trade-plan', ticker, timeframe, direction, useCurrentClose ?? 'auto'] : null,
+    ([url]) => fetcher(url as string, {
+      ticker,
+      timeframe,
+      direction,
+      use_current_close: useCurrentClose ?? undefined,
+    }),
     { refreshInterval: 60000 }
   );
 

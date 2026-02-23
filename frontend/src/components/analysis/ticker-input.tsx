@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 const TIMEFRAMES = [
   { value: "1m", label: "1m" },
@@ -28,25 +30,28 @@ const DIRECTIONS = [
 ] as const
 
 interface TickerInputProps {
-  onAnalyze: (ticker: string, timeframe: string, direction: string) => void
+  onAnalyze: (ticker: string, timeframe: string, direction: string, useCurrentClose: boolean | null) => void
   loading?: boolean
   defaultTicker?: string
+  defaultUseCurrentClose?: boolean | null
 }
 
 export function TickerInput({
   onAnalyze,
   loading = false,
   defaultTicker = "",
+  defaultUseCurrentClose = null,
 }: TickerInputProps) {
   const [ticker, setTicker] = useState(defaultTicker)
   const [timeframe, setTimeframe] = useState("1d")
   const [direction, setDirection] = useState("bullish")
+  const [useCurrentClose, setUseCurrentClose] = useState<boolean | null>(defaultUseCurrentClose)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const cleaned = ticker.trim().toUpperCase()
     if (cleaned) {
-      onAnalyze(cleaned, timeframe, direction)
+      onAnalyze(cleaned, timeframe, direction, useCurrentClose)
     }
   }
 
@@ -103,6 +108,24 @@ export function TickerInput({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Anchor toggle */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ucc-toggle" className="text-xs font-medium text-muted-foreground">
+          Anchor
+        </Label>
+        <div className="flex items-center gap-2 h-9">
+          <Switch
+            id="ucc-toggle"
+            checked={useCurrentClose === true}
+            onCheckedChange={(checked) => setUseCurrentClose(checked ? true : null)}
+            disabled={loading}
+          />
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {useCurrentClose === true ? "Current Close" : "Auto"}
+          </span>
+        </div>
       </div>
 
       {/* Analyze button */}

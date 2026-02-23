@@ -7,8 +7,11 @@ import { TickerInput } from "@/components/analysis/ticker-input"
 export default function AnalyzePage() {
   const router = useRouter()
 
-  function handleAnalyze(ticker: string, timeframe: string, direction: string) {
+  function handleAnalyze(ticker: string, timeframe: string, direction: string, useCurrentClose: boolean | null) {
     const params = new URLSearchParams({ tf: timeframe, dir: direction })
+    if (useCurrentClose === true) {
+      params.set("ucc", "1")
+    }
     router.push(`/analyze/${ticker}?${params.toString()}`)
   }
 

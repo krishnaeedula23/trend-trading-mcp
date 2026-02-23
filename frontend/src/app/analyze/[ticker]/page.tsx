@@ -27,8 +27,10 @@ export default function AnalyzeTickerPage({
 
   const timeframe = searchParams.get("tf") ?? "1d"
   const direction = searchParams.get("dir") ?? "bullish"
+  const uccParam = searchParams.get("ucc")
+  const useCurrentClose: boolean | null = uccParam === "1" ? true : null
 
-  const { data, error, isLoading, refresh } = useTradePlan(ticker, timeframe, direction)
+  const { data, error, isLoading, refresh } = useTradePlan(ticker, timeframe, direction, useCurrentClose)
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -36,13 +38,17 @@ export default function AnalyzeTickerPage({
   function handleAnalyze(
     newTicker: string,
     newTimeframe: string,
-    newDirection: string
+    newDirection: string,
+    newUcc: boolean | null
   ) {
     setSaved(false)
     const params = new URLSearchParams({
       tf: newTimeframe,
       dir: newDirection,
     })
+    if (newUcc === true) {
+      params.set("ucc", "1")
+    }
     router.push(`/analyze/${newTicker}?${params.toString()}`)
   }
 
@@ -87,6 +93,7 @@ export default function AnalyzeTickerPage({
           onAnalyze={handleAnalyze}
           loading={isLoading}
           defaultTicker={ticker.toUpperCase()}
+          defaultUseCurrentClose={useCurrentClose}
         />
         {data && (
           <div className="flex items-center gap-3">
