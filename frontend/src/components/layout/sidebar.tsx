@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Search,
+  Radar,
   Lightbulb,
   List,
   Bell,
@@ -27,6 +28,7 @@ import { Separator } from "@/components/ui/separator"
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Analyze", href: "/analyze", icon: Search },
+  { label: "Scan", href: "/scan", icon: Radar },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
   { label: "Watchlists", href: "/watchlists", icon: List },
   { label: "Alerts", href: "/alerts", icon: Bell, badge: "Soon" },

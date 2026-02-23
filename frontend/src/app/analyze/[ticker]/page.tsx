@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { TickerInput } from "@/components/analysis/ticker-input"
 import { IndicatorPanel } from "@/components/analysis/indicator-panel"
 import { GreenFlagChecklist } from "@/components/analysis/green-flag-checklist"
+import { ProbableSetups } from "@/components/analysis/probable-setups"
 import { GradeBadge } from "@/components/ideas/grade-badge"
 import { IndicatorPanelSkeleton } from "@/components/skeletons/indicator-panel-skeleton"
 import { ErrorDisplay } from "@/components/ui/error-display"
@@ -135,6 +136,8 @@ export default function AnalyzeTickerPage({
       {data && !isLoading && (
         <>
           <IndicatorPanel data={data} />
+
+          <ProbableSetups data={data} />
 
           <GreenFlagChecklist
             greenFlag={data.green_flag}
