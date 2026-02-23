@@ -108,7 +108,7 @@ def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None,
     return result
 
 
-def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
+def key_pivots(daily_df: pd.DataFrame, **_kwargs: object) -> dict:
     """
     Compute key pivot levels from daily OHLCV data.
 
@@ -119,8 +119,12 @@ def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
 
     Requires at least ~400 daily bars (2y) for yearly pivot.
     Returns None for any level that can't be computed.
+
+    NOTE: Always uses the previous *completed* period (iloc[-2] on the
+    resampled frame).  The use_current_close flag (accepted and ignored
+    via **_kwargs for backward-compat) is irrelevant here — pivots are
+    by definition the prior period's close, not the current incomplete one.
     """
-    anchor = -1 if use_current_close else -2
     result: dict = {}
 
     # Resample daily to weekly
@@ -128,7 +132,7 @@ def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(weekly) >= 2:
-        pw = weekly.iloc[anchor]
+        pw = weekly.iloc[-2]
         result["pwh"] = round(float(pw["high"]), 4)
         result["pwl"] = round(float(pw["low"]), 4)
         result["pwc"] = round(float(pw["close"]), 4)
@@ -140,7 +144,7 @@ def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(monthly) >= 2:
-        pm = monthly.iloc[anchor]
+        pm = monthly.iloc[-2]
         result["pmoh"] = round(float(pm["high"]), 4)
         result["pmol"] = round(float(pm["low"]), 4)
         result["pmoc"] = round(float(pm["close"]), 4)
@@ -152,7 +156,7 @@ def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(quarterly) >= 2:
-        result["pqc"] = round(float(quarterly.iloc[anchor]["close"]), 4)
+        result["pqc"] = round(float(quarterly.iloc[-2]["close"]), 4)
     else:
         result["pqc"] = None
 
@@ -161,7 +165,7 @@ def key_pivots(daily_df: pd.DataFrame, use_current_close: bool = False) -> dict:
         "open": "first", "high": "max", "low": "min", "close": "last",
     }).dropna()
     if len(yearly) >= 2:
-        result["pyc"] = round(float(yearly.iloc[anchor]["close"]), 4)
+        result["pyc"] = round(float(yearly.iloc[-2]["close"]), 4)
     else:
         result["pyc"] = None
 
