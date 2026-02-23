@@ -23,7 +23,7 @@ from api.indicators.satyland.atr_levels import atr_levels
 from api.indicators.satyland.green_flag import green_flag_checklist
 from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.satyland.pivot_ribbon import pivot_ribbon
-from api.indicators.satyland.price_structure import price_structure
+from api.indicators.satyland.price_structure import price_structure, key_pivots
 
 router = APIRouter(prefix="/api/satyland", tags=["satyland"])
 
@@ -248,6 +248,7 @@ async def trade_plan(req: TradePlanRequest):
     try:
         atr_source_df = _fetch_atr_source(req.ticker, mode)
         daily_df      = _fetch_daily(req.ticker) if mode != "day" else atr_source_df
+        daily_long_df = _fetch_daily(req.ticker, lookback="2y")
         intraday_df   = _fetch_intraday(req.ticker, req.timeframe)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -260,6 +261,7 @@ async def trade_plan(req: TradePlanRequest):
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
         struct = price_structure(daily_df)
+        pivots = key_pivots(daily_long_df)
 
         # Fetch MTF ribbons in parallel
         mtf_ribbons = await _fetch_mtf_ribbons(req.ticker, req.timeframe)
@@ -278,6 +280,7 @@ async def trade_plan(req: TradePlanRequest):
                 "pivot_ribbon":     ribbon,
                 "phase_oscillator": phase,
                 "price_structure":  struct,
+                "key_pivots":       pivots,
                 "green_flag":       flags,
                 "mtf_ribbons":      mtf_ribbons,
             },
@@ -314,6 +317,7 @@ async def batch_calculate(req: BatchCalculateRequest):
             try:
                 atr_source_df = await asyncio.to_thread(_fetch_atr_source, ticker, mode)
                 daily_df = await asyncio.to_thread(_fetch_daily, ticker) if mode != "day" else atr_source_df
+                daily_long_df = await asyncio.to_thread(_fetch_daily, ticker, "2y")
                 intraday_df = await asyncio.to_thread(_fetch_intraday, ticker, req.timeframe)
 
                 atr = atr_levels(atr_source_df, intraday_df=intraday_df,
@@ -321,6 +325,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                 ribbon = pivot_ribbon(intraday_df)
                 phase = phase_oscillator(intraday_df)
                 struct = price_structure(daily_df)
+                pivots = key_pivots(daily_long_df)
                 mtf = await _fetch_mtf_ribbons(ticker, req.timeframe)
                 flags = green_flag_checklist(atr, ribbon, phase, struct, req.direction,
                                              mtf_ribbons=mtf)
@@ -337,6 +342,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                         "pivot_ribbon": ribbon,
                         "phase_oscillator": phase,
                         "price_structure": struct,
+                        "key_pivots": pivots,
                         "green_flag": flags,
                         "mtf_ribbons": mtf,
                     },

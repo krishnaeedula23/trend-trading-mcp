@@ -172,6 +172,19 @@ export interface GreenFlag {
   verbal_audit: string;
 }
 
+// --- Key Pivots ---
+
+export interface KeyPivots {
+  pwh: number | null;
+  pwl: number | null;
+  pwc: number | null;
+  pmoh: number | null;
+  pmol: number | null;
+  pmoc: number | null;
+  pqc: number | null;
+  pyc: number | null;
+}
+
 // --- Trade Plan Response (POST /api/satyland/trade-plan) ---
 
 export interface MtfRibbonEntry {
@@ -187,6 +200,7 @@ export interface MtfRibbonEntry {
 export interface TradePlanResponse extends CalculateResponse {
   direction: string;
   price_structure: PriceStructure;
+  key_pivots?: KeyPivots;
   green_flag: GreenFlag;
   mtf_ribbons?: Record<string, MtfRibbonEntry>;
 }

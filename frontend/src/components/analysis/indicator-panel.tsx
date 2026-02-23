@@ -310,6 +310,7 @@ function PhaseCard({ data }: { data: TradePlanResponse }) {
 
 function PriceStructureCard({ data }: { data: TradePlanResponse }) {
   const ps = data.price_structure
+  const kp = data.key_pivots
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
@@ -328,14 +329,32 @@ function PriceStructureCard({ data }: { data: TradePlanResponse }) {
       <CardContent className="space-y-2">
         <DataRow label="PDH" value={`$${fmt(ps.pdh)}`} />
         <DataRow label="PDL" value={`$${fmt(ps.pdl)}`} />
-        <DataRow label="PDC" value={`$${fmt(ps.pdc)}`} />
+        <PivotRow label="PDC Pivot" value={ps.pdc} />
         <div className="my-2 h-px bg-border/50" />
-        {ps.pmh != null && <DataRow label="PMH" value={`$${fmt(ps.pmh)}`} />}
-        {ps.pml != null && <DataRow label="PML" value={`$${fmt(ps.pml)}`} />}
+        {kp?.pwh != null && <DataRow label="PWH" value={`$${fmt(kp.pwh)}`} />}
+        {kp?.pwl != null && <DataRow label="PWL" value={`$${fmt(kp.pwl)}`} />}
+        {kp?.pwc != null && <PivotRow label="PWC Pivot" value={kp.pwc} />}
+        <div className="my-2 h-px bg-border/50" />
+        {kp?.pmoh != null && <DataRow label="Prev Mo High" value={`$${fmt(kp.pmoh)}`} />}
+        {kp?.pmol != null && <DataRow label="Prev Mo Low" value={`$${fmt(kp.pmol)}`} />}
+        {kp?.pmoc != null && <PivotRow label="Prev Mo Pivot" value={kp.pmoc} />}
+        <div className="my-2 h-px bg-border/50" />
+        {kp?.pqc != null && <PivotRow label="Prev Qtr Pivot" value={kp.pqc} />}
+        {kp?.pyc != null && <PivotRow label="Prev Yr Pivot" value={kp.pyc} />}
         <div className="my-2 h-px bg-border/50" />
         <DataRow label="Gap" value={formatLabel(ps.gap_scenario)} />
       </CardContent>
     </Card>
+  )
+}
+
+function PivotRow({ label, value }: { label: string; value: number | null }) {
+  if (value == null) return null
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono font-medium text-amber-400">${fmt(value)}</span>
+    </div>
   )
 }
 
