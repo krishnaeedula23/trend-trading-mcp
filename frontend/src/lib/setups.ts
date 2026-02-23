@@ -73,11 +73,8 @@ function calcConfidence(
   const requiredMet = required.filter((c) => c.met).length
   const optionalMet = optional.filter((c) => c.met).length
 
-  if (requiredMet < required.length) {
-    // Some required conditions missing
-    if (requiredMet >= Math.ceil(required.length * 0.5)) return "forming"
-    return null
-  }
+  // ALL required must be met — no "forming" from partial required
+  if (requiredMet < required.length) return null
 
   // All required met
   if (optional.length === 0) return "strong"
@@ -126,9 +123,8 @@ function detectTrendContinuation(d: TradePlanResponse): DetectedSetup | null {
   if (!isBullish && !isBearish) return null
 
   const dir = isBullish ? "bullish" as const : "bearish" as const
-  const pullback = isBullish
-    ? ribbon.bias_candle === "blue"
-    : ribbon.bias_candle === "orange"
+  const pullbackCandle = isBullish ? "blue" : "orange"
+  const pullback = ribbon.bias_candle === pullbackCandle
   const phaseFiring = isBullish
     ? phase.phase === "green"
     : phase.phase === "red"
@@ -140,24 +136,22 @@ function detectTrendContinuation(d: TradePlanResponse): DetectedSetup | null {
     { label: "ATR room available", met: atr.atr_room_ok, required: true },
     { label: "Above 48 EMA", met: ribbon.above_48ema, required: false },
     { label: "Above 200 EMA", met: ribbon.above_200ema, required: false },
-    { label: "No chopzilla", met: !ribbon.chopzilla, required: false },
+    { label: "No chopzilla", met: !atr.chopzilla, required: false },
   ]
 
-  const entryPrice = isBullish
-    ? Math.min(ribbon.ema13, ribbon.ema21)
-    : Math.max(ribbon.ema13, ribbon.ema21)
+  const entryLow = Math.min(ribbon.ema13, ribbon.ema21)
+  const entryHigh = Math.max(ribbon.ema13, ribbon.ema21)
   const targetLevel = isBullish
     ? atr.levels?.mid_range_bull
     : atr.levels?.mid_range_bear
-  const stopPrice = isBullish ? ribbon.ema48 : ribbon.ema48
 
   return buildSetup(
     "trend_continuation",
     dir,
     conditions,
-    { zone: `EMA 13/21 bounce (${fmt(ribbon.ema13)}–${fmt(ribbon.ema21)})`, price: entryPrice },
+    { zone: `EMA 13/21 bounce (${fmt(entryLow)}–${fmt(entryHigh)})`, price: isBullish ? entryLow : entryHigh },
     { zone: `Mid-Range 61.8% (${fmt(targetLevel?.price)})`, price: targetLevel?.price ?? null },
-    { zone: `${isBullish ? "Below" : "Above"} 48 EMA (${fmt(stopPrice)})`, price: stopPrice }
+    { zone: `${isBullish ? "Below" : "Above"} 48 EMA (${fmt(ribbon.ema48)})`, price: ribbon.ema48 }
   )
 }
 
@@ -165,8 +159,9 @@ function detectGoldenGate(d: TradePlanResponse): DetectedSetup | null {
   const { atr_levels: atr, pivot_ribbon: ribbon, phase_oscillator: phase } = d
   const pos = atr.price_position
 
-  const isBullGG = pos === "above_golden_gate" || pos === "above_mid_range" || pos === "above_full_range"
-  const isBearGG = pos === "below_golden_gate" || pos === "below_mid_range" || pos === "below_full_range"
+  // Only trigger when price is specifically at or just past the golden gate level
+  const isBullGG = pos === "above_golden_gate"
+  const isBearGG = pos === "below_golden_gate"
 
   if (!isBullGG && !isBearGG) return null
 
@@ -183,7 +178,7 @@ function detectGoldenGate(d: TradePlanResponse): DetectedSetup | null {
     { label: `Ribbon stacked ${dir}`, met: ribbonStacked, required: true },
     { label: `Phase firing ${dir === "bullish" ? "green" : "red"}`, met: phaseFiring, required: true },
     { label: "ATR room available", met: atr.atr_room_ok, required: false },
-    { label: "No chopzilla", met: !ribbon.chopzilla, required: false },
+    { label: "No chopzilla", met: !atr.chopzilla, required: false },
   ]
 
   const ggLevel = dir === "bullish"
@@ -204,10 +199,10 @@ function detectGoldenGate(d: TradePlanResponse): DetectedSetup | null {
 }
 
 function detectVomy(d: TradePlanResponse): DetectedSetup | null {
-  const { pivot_ribbon: ribbon, phase_oscillator: phase } = d
+  const { pivot_ribbon: ribbon, phase_oscillator: phase, atr_levels: atr } = d
 
   // Bearish/chopzilla ribbon, below 48 EMA, orange pullback (short setup)
-  const ribbonBearish = ribbon.ribbon_state === "bearish" || ribbon.chopzilla
+  const ribbonBearish = ribbon.ribbon_state === "bearish" || ribbon.ribbon_state === "chopzilla"
   const below48 = !ribbon.above_48ema
   const orangeCandle = ribbon.bias_candle === "orange"
 
@@ -223,7 +218,7 @@ function detectVomy(d: TradePlanResponse): DetectedSetup | null {
     { label: "Phase firing red", met: phase.phase === "red", required: false },
   ]
 
-  const targetLevel = d.atr_levels.levels?.mid_range_bear
+  const targetLevel = atr.levels?.mid_range_bear
 
   return buildSetup(
     "vomy",
@@ -236,15 +231,16 @@ function detectVomy(d: TradePlanResponse): DetectedSetup | null {
 }
 
 function detectIvomy(d: TradePlanResponse): DetectedSetup | null {
-  const { pivot_ribbon: ribbon, phase_oscillator: phase } = d
+  const { pivot_ribbon: ribbon, phase_oscillator: phase, atr_levels: atr } = d
 
-  // Bullish or transitioning ribbon, above 48 EMA, blue pullback (long setup)
-  const ribbonBullish = ribbon.ribbon_state === "bullish" || ribbon.chopzilla
+  // Chopzilla ribbon (transitioning, NOT already fully bullish), above 48 EMA, blue pullback
+  // If ribbon is already "bullish", that's Trend Continuation, not iVomy
+  const ribbonTransitioning = ribbon.ribbon_state === "chopzilla"
   const above48 = ribbon.above_48ema
   const blueCandle = ribbon.bias_candle === "blue"
 
   const conditions: SetupCondition[] = [
-    { label: "Ribbon bullish or transitioning", met: ribbonBullish, required: true },
+    { label: "Ribbon transitioning (chopzilla)", met: ribbonTransitioning, required: true },
     { label: "Above 48 EMA", met: above48, required: true },
     { label: "Blue pullback candle", met: blueCandle, required: true },
     {
@@ -255,7 +251,7 @@ function detectIvomy(d: TradePlanResponse): DetectedSetup | null {
     { label: "Phase firing green", met: phase.phase === "green", required: false },
   ]
 
-  const targetLevel = d.atr_levels.levels?.mid_range_bull
+  const targetLevel = atr.levels?.mid_range_bull
 
   return buildSetup(
     "ivomy",
@@ -272,6 +268,7 @@ function detectSqueeze(d: TradePlanResponse): DetectedSetup | null {
 
   const phaseCompressed = phase.in_compression
   const ribbonCompressed = ribbon.in_compression
+  // Need at least one compression source
   if (!phaseCompressed && !ribbonCompressed) return null
 
   // Nested squeeze: all MTF timeframes also in compression
@@ -282,13 +279,17 @@ function detectSqueeze(d: TradePlanResponse): DetectedSetup | null {
   const conditions: SetupCondition[] = [
     { label: "Phase in compression", met: phaseCompressed, required: true },
     { label: "Ribbon in compression", met: ribbonCompressed, required: true },
-    { label: "No chopzilla", met: !ribbon.chopzilla, required: true },
+    { label: "No ATR chopzilla", met: !atr.chopzilla, required: false },
     { label: "Nested squeeze (MTF compressed)", met: nestedSqueeze, required: false },
     { label: "Ribbon not folded", met: ribbon.ribbon_state !== "chopzilla", required: false },
   ]
 
-  // Direction based on ribbon state + above/below 48
-  const dir = ribbon.above_48ema ? "bullish" as const : "bearish" as const
+  // Direction based on ribbon state; if chopzilla use 48 EMA as tiebreaker
+  let dir: "bullish" | "bearish"
+  if (ribbon.ribbon_state === "bullish") dir = "bullish"
+  else if (ribbon.ribbon_state === "bearish") dir = "bearish"
+  else dir = ribbon.above_48ema ? "bullish" : "bearish"
+
   const nextLevel = dir === "bullish"
     ? atr.levels?.golden_gate_bull ?? atr.levels?.mid_range_bull
     : atr.levels?.golden_gate_bear ?? atr.levels?.mid_range_bear
@@ -297,21 +298,22 @@ function detectSqueeze(d: TradePlanResponse): DetectedSetup | null {
     "squeeze",
     dir,
     conditions,
-    { zone: "Compression break", price: atr.current_price },
+    { zone: `Compression break (${fmt(atr.current_price)})`, price: atr.current_price },
     { zone: `Next ATR level (${fmt(nextLevel?.price)})`, price: nextLevel?.price ?? null },
-    { zone: `Opposite side of ribbon (${fmt(dir === "bullish" ? ribbon.ema21 : ribbon.ema21)})`, price: ribbon.ema21 }
+    { zone: `Opposite side of ribbon (${fmt(ribbon.ema21)})`, price: ribbon.ema21 }
   )
 }
 
 function detectDivergenceExtreme(d: TradePlanResponse): DetectedSetup | null {
-  const { phase_oscillator: phase, pivot_ribbon: ribbon } = d
+  const { phase_oscillator: phase, pivot_ribbon: ribbon, atr_levels: atr } = d
 
   const extremeZones = new Set(["extreme_up", "extreme_down", "distribution", "accumulation"])
   const inExtreme = extremeZones.has(phase.current_zone)
   const hasMR = phase.last_mr_type != null
   const mrRecent = (phase.last_mr_bars_ago ?? 999) <= 5
 
-  if (!inExtreme && !hasMR) return null
+  // All three are required
+  if (!inExtreme || !hasMR || !mrRecent) return null
 
   // Direction based on zone
   const bottomZones = new Set(["extreme_down", "accumulation"])
@@ -329,16 +331,12 @@ function detectDivergenceExtreme(d: TradePlanResponse): DetectedSetup | null {
     { label: "Phase reversing direction", met: phaseReversing, required: false },
   ]
 
-  const targetLevel = dir === "bullish"
-    ? ribbon.ema21
-    : ribbon.ema21
-
   return buildSetup(
     "divergence_extreme",
     dir,
     conditions,
-    { zone: "Mean reversion bar", price: d.atr_levels.current_price },
-    { zone: `Return to 21 EMA (${fmt(targetLevel)})`, price: targetLevel },
+    { zone: `Mean reversion bar (${fmt(atr.current_price)})`, price: atr.current_price },
+    { zone: `Return to 21 EMA (${fmt(ribbon.ema21)})`, price: ribbon.ema21 },
     { zone: "New extreme", price: null }
   )
 }
@@ -348,8 +346,6 @@ function detectDipConnoisseur(d: TradePlanResponse): DetectedSetup | null {
 
   const belowMidRange = atr.price_position === "below_mid_range"
     || atr.price_position === "below_full_range"
-    || atr.price_position === "below_golden_gate"
-    || atr.price_position === "below_put_trigger"
 
   if (!belowMidRange) return null
 
@@ -357,9 +353,10 @@ function detectDipConnoisseur(d: TradePlanResponse): DetectedSetup | null {
     || phase.zone_crosses.leaving_extreme_down
   const phaseReversal = phase.oscillator > phase.oscillator_prev
 
+  // Need at least one confirmation signal beyond just being below mid-range
   const conditions: SetupCondition[] = [
-    { label: "Price below mid-range or lower", met: belowMidRange, required: true },
-    { label: "Leaving accumulation / extreme down", met: leavingAccum, required: false },
+    { label: "Price below mid-range or full-range", met: belowMidRange, required: true },
+    { label: "Leaving accumulation / extreme down", met: leavingAccum, required: true },
     { label: "Phase reversing upward", met: phaseReversal, required: false },
   ]
 
@@ -393,7 +390,7 @@ export function detectSetups(data: TradePlanResponse): DetectedSetup[] {
     .map((fn) => fn(data))
     .filter((s): s is DetectedSetup => s != null)
     .sort((a, b) => {
-      // Strong first, then moderate, then forming
+      // Strong first, then moderate
       const order = { strong: 0, moderate: 1, forming: 2 }
       return order[a.confidence] - order[b.confidence]
     })
