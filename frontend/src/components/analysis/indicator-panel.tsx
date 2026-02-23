@@ -136,6 +136,48 @@ const MODE_PDC_LABEL_CC: Record<string, string> = {
   position: "Quarter Close",
 }
 
+function atrCoveredColor(pct: number): string {
+  if (pct >= 90) return "text-red-400"
+  if (pct >= 60) return "text-amber-400"
+  return "text-emerald-400"
+}
+
+function getNextTarget(
+  atr: TradePlanResponse["atr_levels"]
+): { label: string; price: number; color: string } | null {
+  const levels = atr.levels
+  if (!levels) return null
+
+  switch (atr.price_position) {
+    case "above_call_trigger":
+      return levels.golden_gate_bull
+        ? { label: "Golden Gate ↑", price: levels.golden_gate_bull.price, color: "text-teal-400" }
+        : null
+    case "above_golden_gate":
+      return levels.mid_range_bull
+        ? { label: "Mid-Range ↑", price: levels.mid_range_bull.price, color: "text-blue-400" }
+        : null
+    case "above_mid_range":
+      return levels.full_range_bull
+        ? { label: "Full Range ↑", price: levels.full_range_bull.price, color: "text-purple-400" }
+        : null
+    case "below_put_trigger":
+      return levels.golden_gate_bear
+        ? { label: "Golden Gate ↓", price: levels.golden_gate_bear.price, color: "text-teal-400" }
+        : null
+    case "below_golden_gate":
+      return levels.mid_range_bear
+        ? { label: "Mid-Range ↓", price: levels.mid_range_bear.price, color: "text-blue-400" }
+        : null
+    case "below_mid_range":
+      return levels.full_range_bear
+        ? { label: "Full Range ↓", price: levels.full_range_bear.price, color: "text-purple-400" }
+        : null
+    default:
+      return null
+  }
+}
+
 function AtrCard({ data }: { data: TradePlanResponse }) {
   const atr = data.atr_levels
   const ucc = data.use_current_close
@@ -144,6 +186,9 @@ function AtrCard({ data }: { data: TradePlanResponse }) {
   const pdcLabel = ucc
     ? (MODE_PDC_LABEL_CC[atr.trading_mode] || "Close")
     : (MODE_PDC_LABEL[atr.trading_mode] || "PDC")
+  const levels = atr.levels || {}
+  const nextTarget = getNextTarget(atr)
+
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
@@ -165,6 +210,14 @@ function AtrCard({ data }: { data: TradePlanResponse }) {
         <DataRow label="Price" value={`$${fmt(atr.current_price)}`} />
         <DataRow label={pdcLabel} value={`$${fmt(atr.pdc)}`} />
         <DataRow label={atrLabel} value={fmt(atr.atr)} />
+        <DataRow
+          label="ATR Covered"
+          value={
+            <span className={cn("font-mono", atrCoveredColor(atr.atr_covered_pct))}>
+              {fmt(atr.atr_covered_pct, 1)}%
+            </span>
+          }
+        />
         <div className="my-2 h-px bg-border/50" />
         <DataRow
           label="Call Trigger"
@@ -176,6 +229,57 @@ function AtrCard({ data }: { data: TradePlanResponse }) {
           label="Put Trigger"
           value={<span className="text-red-400">${fmt(atr.put_trigger)}</span>}
         />
+        <div className="my-2 h-px bg-border/50" />
+        {levels.golden_gate_bull && (
+          <DataRow
+            label="Golden Gate ↑"
+            value={<span className="text-teal-400">${fmt(levels.golden_gate_bull.price)}</span>}
+          />
+        )}
+        {levels.golden_gate_bear && (
+          <DataRow
+            label="Golden Gate ↓"
+            value={<span className="text-orange-400">${fmt(levels.golden_gate_bear.price)}</span>}
+          />
+        )}
+        {nextTarget && (
+          <>
+            <div className="my-2 h-px bg-border/50" />
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <span className="text-primary">→</span> Next Target
+              </span>
+              <span className={cn("font-mono font-semibold", nextTarget.color)}>
+                {nextTarget.label} ${fmt(nextTarget.price)}
+              </span>
+            </div>
+          </>
+        )}
+        <div className="my-2 h-px bg-border/50" />
+        {levels.mid_range_bull && (
+          <DataRow
+            label="Mid-Range ↑"
+            value={<span className="text-blue-400">${fmt(levels.mid_range_bull.price)}</span>}
+          />
+        )}
+        {levels.mid_range_bear && (
+          <DataRow
+            label="Mid-Range ↓"
+            value={<span className="text-blue-400">${fmt(levels.mid_range_bear.price)}</span>}
+          />
+        )}
+        {levels.full_range_bull && (
+          <DataRow
+            label="Full Range ↑"
+            value={<span className="text-purple-400">${fmt(levels.full_range_bull.price)}</span>}
+          />
+        )}
+        {levels.full_range_bear && (
+          <DataRow
+            label="Full Range ↓"
+            value={<span className="text-purple-400">${fmt(levels.full_range_bear.price)}</span>}
+          />
+        )}
         <div className="my-2 h-px bg-border/50" />
         <DataRow label="Trend" value={formatLabel(atr.trend)} />
         <DataRow
