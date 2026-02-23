@@ -18,6 +18,7 @@ import type {
   MtfRibbonEntry,
   MtfPhaseEntry,
   MeanReversionType,
+  OpenGap,
 } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -701,8 +702,71 @@ function PriceStructureCard({ data }: { data: TradePlanResponse }) {
         {kp?.pyc != null && <PivotRow label="Prev Yr Pivot" value={kp.pyc} color={pivotColor(kp.pyc)} />}
         <div className="my-2 h-px bg-border/50" />
         <DataRow label="Gap" value={formatLabel(ps.gap_scenario)} />
+        {data.open_gaps && data.open_gaps.length > 0 && (
+          <>
+            <div className="my-2 h-px bg-border/50" />
+            <OpenGapsSection gaps={data.open_gaps} currentPrice={ps.current_price} />
+          </>
+        )}
       </CardContent>
     </Card>
+  )
+}
+
+function OpenGapsSection({ gaps, currentPrice }: { gaps: OpenGap[]; currentPrice: number }) {
+  // Split into gaps above and below current price
+  const above = gaps.filter((g) => g.gap_low > currentPrice)
+  const below = gaps.filter((g) => g.gap_high < currentPrice)
+  const nearest = gaps.reduce<OpenGap | null>((best, g) => {
+    const dist = Math.min(Math.abs(g.gap_high - currentPrice), Math.abs(g.gap_low - currentPrice))
+    if (!best) return g
+    const bestDist = Math.min(Math.abs(best.gap_high - currentPrice), Math.abs(best.gap_low - currentPrice))
+    return dist < bestDist ? g : best
+  }, null)
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Open Gaps (6mo)</span>
+        <div className="flex items-center gap-1.5">
+          {above.length > 0 && (
+            <Badge className="text-[10px] bg-emerald-600/20 text-emerald-400 border-emerald-600/30">
+              {above.length}↑
+            </Badge>
+          )}
+          {below.length > 0 && (
+            <Badge className="text-[10px] bg-red-600/20 text-red-400 border-red-600/30">
+              {below.length}↓
+            </Badge>
+          )}
+        </div>
+      </div>
+      {gaps.map((g) => {
+        const isNearest = g === nearest
+        const isAbove = g.gap_low > currentPrice
+        const color = g.type === "gap_up" ? "text-emerald-400" : "text-red-400"
+        return (
+          <div
+            key={`${g.date}-${g.type}`}
+            className={cn(
+              "flex items-center justify-between text-xs",
+              isNearest && "bg-primary/5 rounded px-1 -mx-1"
+            )}
+          >
+            <span className="text-muted-foreground flex items-center gap-1">
+              {isNearest && <span className="text-primary text-[10px]">→</span>}
+              {g.date.slice(5)}
+              <span className={cn("text-[10px]", color)}>
+                {g.type === "gap_up" ? "↑" : "↓"}
+              </span>
+            </span>
+            <span className={cn("font-mono", color)}>
+              ${fmt(g.gap_low)}–${fmt(g.gap_high)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

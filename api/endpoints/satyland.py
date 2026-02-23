@@ -23,7 +23,7 @@ from api.indicators.satyland.atr_levels import atr_levels
 from api.indicators.satyland.green_flag import green_flag_checklist
 from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.satyland.pivot_ribbon import pivot_ribbon
-from api.indicators.satyland.price_structure import price_structure, key_pivots
+from api.indicators.satyland.price_structure import price_structure, key_pivots, open_gaps
 from api.utils.market_hours import resolve_use_current_close
 
 router = APIRouter(prefix="/api/satyland", tags=["satyland"])
@@ -290,6 +290,9 @@ async def trade_plan(req: TradePlanRequest):
         phase  = phase_oscillator(intraday_df)
         struct = price_structure(daily_df, use_current_close=ucc)
         pivots = key_pivots(daily_long_df, use_current_close=ucc)
+        # Scan last ~6 months for unfilled gaps
+        gaps_df = daily_long_df.loc[daily_long_df.index >= daily_long_df.index[-1] - pd.DateOffset(months=6)]
+        gaps   = open_gaps(gaps_df)
 
         # Fetch MTF ribbons and phases in parallel
         mtf_ribbons, mtf_phases = await asyncio.gather(
@@ -313,6 +316,7 @@ async def trade_plan(req: TradePlanRequest):
                 "phase_oscillator": phase,
                 "price_structure":  struct,
                 "key_pivots":       pivots,
+                "open_gaps":        gaps,
                 "green_flag":       flags,
                 "mtf_ribbons":      mtf_ribbons,
                 "mtf_phases":       mtf_phases,
@@ -361,6 +365,8 @@ async def batch_calculate(req: BatchCalculateRequest):
                 phase = phase_oscillator(intraday_df)
                 struct = price_structure(daily_df, use_current_close=ucc)
                 pivots = key_pivots(daily_long_df, use_current_close=ucc)
+                gaps_df = daily_long_df.loc[daily_long_df.index >= daily_long_df.index[-1] - pd.DateOffset(months=6)]
+                gaps = open_gaps(gaps_df)
                 mtf, mtf_ph = await asyncio.gather(
                     _fetch_mtf_ribbons(ticker, req.timeframe),
                     _fetch_mtf_phases(ticker, req.timeframe),
@@ -382,6 +388,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                         "phase_oscillator": phase,
                         "price_structure": struct,
                         "key_pivots": pivots,
+                        "open_gaps": gaps,
                         "green_flag": flags,
                         "mtf_ribbons": mtf,
                         "mtf_phases": mtf_ph,

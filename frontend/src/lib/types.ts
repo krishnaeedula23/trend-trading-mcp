@@ -195,6 +195,16 @@ export interface KeyPivots {
   pyc: number | null;
 }
 
+// --- Open Gaps ---
+
+export interface OpenGap {
+  date: string;
+  type: "gap_up" | "gap_down";
+  gap_high: number;
+  gap_low: number;
+  size: number;
+}
+
 // --- Trade Plan Response (POST /api/satyland/trade-plan) ---
 
 export interface MtfRibbonEntry {
@@ -220,6 +230,7 @@ export interface TradePlanResponse extends CalculateResponse {
   direction: string;
   price_structure: PriceStructure;
   key_pivots?: KeyPivots;
+  open_gaps?: OpenGap[];
   green_flag: GreenFlag;
   mtf_ribbons?: Record<string, MtfRibbonEntry>;
   mtf_phases?: Record<string, MtfPhaseEntry>;

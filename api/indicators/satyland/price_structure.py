@@ -85,14 +85,15 @@ def price_structure(df: pd.DataFrame, premarket_df: pd.DataFrame | None = None,
 
     result["structural_bias"] = bias
 
-    # Gap scenario (open vs PDH/PDL — approximate using current price)
-    if curr_close > pdh:
+    # Gap scenario — today's open vs previous day's range
+    today_open = float(df["open"].iloc[-1])
+    if today_open > pdh:
         gap_scenario = "gap_above_pdh"
-    elif curr_close < pdl:
+    elif today_open < pdl:
         gap_scenario = "gap_below_pdl"
-    elif pdc is not None and curr_close > pdc:
+    elif today_open > pdc:
         gap_scenario = "gap_up_inside_range"
-    elif pdc is not None and curr_close < pdc:
+    elif today_open < pdc:
         gap_scenario = "gap_down_inside_range"
     else:
         gap_scenario = "no_gap"
@@ -170,3 +171,78 @@ def key_pivots(daily_df: pd.DataFrame, **_kwargs: object) -> dict:
         result["pyc"] = None
 
     return result
+
+
+def open_gaps(daily_df: pd.DataFrame) -> list[dict]:
+    """
+    Scan daily bars for unfilled (open) gaps.
+
+    A *true gap up* exists on day i when day[i].low > day[i-1].high.
+    A *true gap down* exists on day i when day[i].high < day[i-1].low.
+
+    A gap is "filled" once any subsequent bar's low <= gap_low (for gap up)
+    or any subsequent bar's high >= gap_high (for gap down).
+
+    Returns a list of unfilled gaps sorted newest-first, each with:
+      date, type ("gap_up"/"gap_down"), gap_high, gap_low, size
+    """
+    if len(daily_df) < 2:
+        return []
+
+    highs = daily_df["high"].values
+    lows = daily_df["low"].values
+    dates = daily_df.index
+
+    gaps: list[dict] = []
+
+    for i in range(1, len(daily_df)):
+        prev_high = float(highs[i - 1])
+        prev_low = float(lows[i - 1])
+        curr_low = float(lows[i])
+        curr_high = float(highs[i])
+
+        if curr_low > prev_high:
+            # Gap up: gap zone is prev_high (bottom) → curr_low (top)
+            gap_high = curr_low
+            gap_low = prev_high
+            # Filled when any subsequent bar's low touches the gap bottom
+            filled = False
+            for j in range(i + 1, len(daily_df)):
+                if float(lows[j]) <= gap_low:
+                    filled = True
+                    break
+            if not filled:
+                dt = dates[i]
+                date_str = dt.strftime("%Y-%m-%d") if hasattr(dt, "strftime") else str(dt)[:10]
+                gaps.append({
+                    "date": date_str,
+                    "type": "gap_up",
+                    "gap_high": round(gap_high, 4),
+                    "gap_low": round(gap_low, 4),
+                    "size": round(gap_high - gap_low, 4),
+                })
+
+        elif curr_high < prev_low:
+            # Gap down: gap zone is curr_high (bottom) → prev_low (top)
+            gap_high = prev_low
+            gap_low = curr_high
+            # Filled when any subsequent bar's high reaches the gap top
+            filled = False
+            for j in range(i + 1, len(daily_df)):
+                if float(highs[j]) >= gap_high:
+                    filled = True
+                    break
+            if not filled:
+                dt = dates[i]
+                date_str = dt.strftime("%Y-%m-%d") if hasattr(dt, "strftime") else str(dt)[:10]
+                gaps.append({
+                    "date": date_str,
+                    "type": "gap_down",
+                    "gap_high": round(gap_high, 4),
+                    "gap_low": round(gap_low, 4),
+                    "size": round(gap_high - gap_low, 4),
+                })
+
+    # Newest first
+    gaps.reverse()
+    return gaps
