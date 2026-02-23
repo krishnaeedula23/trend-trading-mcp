@@ -130,6 +130,31 @@ def phase_oscillator(df: pd.DataFrame) -> dict:
         "leaving_extreme_up":    osc_prev >= 100   and osc_curr < 100,
     }
 
+    # ── Last mean reversion signal (scan backward for most recent zone cross) ─
+    last_mr_type: str | None = None
+    last_mr_bars_ago: int | None = None
+    osc_vals = oscillator.values
+    for i in range(len(osc_vals) - 1, 0, -1):
+        prev_val = float(osc_vals[i - 1])
+        curr_val = float(osc_vals[i])
+        bars_back = len(osc_vals) - 1 - i
+        if prev_val <= -61.8 and curr_val > -61.8:
+            last_mr_type = "leaving_accumulation"
+            last_mr_bars_ago = bars_back
+            break
+        if prev_val <= -100 and curr_val > -100:
+            last_mr_type = "leaving_extreme_down"
+            last_mr_bars_ago = bars_back
+            break
+        if prev_val >= 61.8 and curr_val < 61.8:
+            last_mr_type = "leaving_distribution"
+            last_mr_bars_ago = bars_back
+            break
+        if prev_val >= 100 and curr_val < 100:
+            last_mr_type = "leaving_extreme_up"
+            last_mr_bars_ago = bars_back
+            break
+
     # ── Current zone ─────────────────────────────────────────────────────────
     if osc_curr >= 100:
         current_zone = "extreme_up"
@@ -155,6 +180,8 @@ def phase_oscillator(df: pd.DataFrame) -> dict:
         "in_compression":  in_compression,
         "current_zone":    current_zone,
         "zone_crosses":    zone_crosses,
+        "last_mr_type":    last_mr_type,
+        "last_mr_bars_ago": last_mr_bars_ago,
         "zones": {
             "extreme":      {"up": 100.0,  "down": -100.0},
             "distribution": {"up": 61.8,   "down": -61.8},

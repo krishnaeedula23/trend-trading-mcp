@@ -235,6 +235,23 @@ async def _fetch_mtf_ribbons(ticker: str, timeframe: str) -> dict[str, dict]:
     return {tf: r for tf, r in results if r is not None}
 
 
+async def _fetch_mtf_phases(ticker: str, timeframe: str) -> dict[str, dict]:
+    """Fetch phase oscillator for each higher timeframe in parallel."""
+    higher_tfs = HIGHER_TIMEFRAMES.get(timeframe, [])
+    if not higher_tfs:
+        return {}
+
+    async def _compute_phase(tf: str) -> tuple[str, dict | None]:
+        try:
+            df = await asyncio.to_thread(_fetch_intraday, ticker, tf)
+            return tf, phase_oscillator(df)
+        except Exception:
+            return tf, None
+
+    results = await asyncio.gather(*(_compute_phase(tf) for tf in higher_tfs))
+    return {tf: r for tf, r in results if r is not None}
+
+
 @router.post("/trade-plan")
 async def trade_plan(req: TradePlanRequest):
     """
@@ -263,8 +280,11 @@ async def trade_plan(req: TradePlanRequest):
         struct = price_structure(daily_df)
         pivots = key_pivots(daily_long_df)
 
-        # Fetch MTF ribbons in parallel
-        mtf_ribbons = await _fetch_mtf_ribbons(req.ticker, req.timeframe)
+        # Fetch MTF ribbons and phases in parallel
+        mtf_ribbons, mtf_phases = await asyncio.gather(
+            _fetch_mtf_ribbons(req.ticker, req.timeframe),
+            _fetch_mtf_phases(req.ticker, req.timeframe),
+        )
 
         flags  = green_flag_checklist(atr, ribbon, phase, struct, req.direction,
                                       req.vix, mtf_ribbons=mtf_ribbons)
@@ -283,6 +303,7 @@ async def trade_plan(req: TradePlanRequest):
                 "key_pivots":       pivots,
                 "green_flag":       flags,
                 "mtf_ribbons":      mtf_ribbons,
+                "mtf_phases":       mtf_phases,
             },
             headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
         )
@@ -326,7 +347,10 @@ async def batch_calculate(req: BatchCalculateRequest):
                 phase = phase_oscillator(intraday_df)
                 struct = price_structure(daily_df)
                 pivots = key_pivots(daily_long_df)
-                mtf = await _fetch_mtf_ribbons(ticker, req.timeframe)
+                mtf, mtf_ph = await asyncio.gather(
+                    _fetch_mtf_ribbons(ticker, req.timeframe),
+                    _fetch_mtf_phases(ticker, req.timeframe),
+                )
                 flags = green_flag_checklist(atr, ribbon, phase, struct, req.direction,
                                              mtf_ribbons=mtf)
 
@@ -345,6 +369,7 @@ async def batch_calculate(req: BatchCalculateRequest):
                         "key_pivots": pivots,
                         "green_flag": flags,
                         "mtf_ribbons": mtf,
+                        "mtf_phases": mtf_ph,
                     },
                 }
             except Exception as exc:

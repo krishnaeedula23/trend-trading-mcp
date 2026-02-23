@@ -103,6 +103,12 @@ export interface Zones {
   zero: number;
 }
 
+export type MeanReversionType =
+  | "leaving_accumulation"
+  | "leaving_extreme_down"
+  | "leaving_distribution"
+  | "leaving_extreme_up";
+
 export interface PhaseOscillator {
   oscillator: number;
   oscillator_prev: number;
@@ -110,6 +116,8 @@ export interface PhaseOscillator {
   in_compression: boolean;
   current_zone: CurrentZone;
   zone_crosses: ZoneCrosses;
+  last_mr_type: MeanReversionType | null;
+  last_mr_bars_ago: number | null;
   zones: Zones;
 }
 
@@ -197,12 +205,22 @@ export interface MtfRibbonEntry {
   above_200ema: boolean;
 }
 
+export interface MtfPhaseEntry {
+  oscillator: number;
+  phase: Phase;
+  in_compression: boolean;
+  current_zone: CurrentZone;
+  last_mr_type: MeanReversionType | null;
+  last_mr_bars_ago: number | null;
+}
+
 export interface TradePlanResponse extends CalculateResponse {
   direction: string;
   price_structure: PriceStructure;
   key_pivots?: KeyPivots;
   green_flag: GreenFlag;
   mtf_ribbons?: Record<string, MtfRibbonEntry>;
+  mtf_phases?: Record<string, MtfPhaseEntry>;
 }
 
 // --- Idea (Supabase row) ---

@@ -16,6 +16,8 @@ import type {
   StructuralBias,
   ConvictionArrow,
   MtfRibbonEntry,
+  MtfPhaseEntry,
+  MeanReversionType,
 } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -274,6 +276,33 @@ function mtfDotColor(state: RibbonState): string {
   }
 }
 
+function phaseDotColor(phase: Phase): string {
+  switch (phase) {
+    case "green":
+      return "bg-emerald-500"
+    case "red":
+      return "bg-red-500"
+    case "compression":
+      return "bg-zinc-400"
+  }
+}
+
+function meanReversionLabel(mrType: MeanReversionType | null, barsAgo: number | null): React.ReactNode {
+  if (!mrType || barsAgo == null) {
+    return <span className="text-xs text-muted-foreground">None</span>
+  }
+  const isBottom = mrType === "leaving_accumulation" || mrType === "leaving_extreme_down"
+  const label = isBottom
+    ? (mrType === "leaving_extreme_down" ? "EXT BOT" : "ACCUM")
+    : (mrType === "leaving_extreme_up" ? "EXT TOP" : "DIST")
+  const barsText = barsAgo === 0 ? "now" : `${barsAgo}b ago`
+  return (
+    <Badge className="text-[10px] bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
+      {label} {barsText}
+    </Badge>
+  )
+}
+
 function MtfRibbonRow({
   currentTf,
   currentState,
@@ -331,6 +360,24 @@ function convictionLabel(arrow: ConvictionArrow, barsAgo: number | null): React.
 
 function PhaseCard({ data }: { data: TradePlanResponse }) {
   const phase = data.phase_oscillator
+  const mtfPhases = data.mtf_phases
+  const hasMtf = mtfPhases && Object.keys(mtfPhases).length > 0
+
+  // Nested squeeze: current TF + all higher TFs in compression
+  const nestedSqueeze = hasMtf
+    && phase.in_compression
+    && Object.values(mtfPhases).every((p) => p.in_compression)
+
+  // Distribution confluence: current + all MTF in distribution or extreme_up
+  const distZones = new Set(["distribution", "extreme_up"])
+  const accumZones = new Set(["accumulation", "extreme_down"])
+  const allDistribution = hasMtf
+    && distZones.has(phase.current_zone)
+    && Object.values(mtfPhases).every((p) => distZones.has(p.current_zone))
+  const allAccumulation = hasMtf
+    && accumZones.has(phase.current_zone)
+    && Object.values(mtfPhases).every((p) => accumZones.has(p.current_zone))
+
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="pb-3">
@@ -369,8 +416,84 @@ function PhaseCard({ data }: { data: TradePlanResponse }) {
             )
           }
         />
+        <DataRow
+          label="Mean Reversion"
+          value={meanReversionLabel(phase.last_mr_type, phase.last_mr_bars_ago)}
+        />
+        {hasMtf && (
+          <>
+            <div className="my-2 h-px bg-border/50" />
+            <MtfPhaseRow
+              currentTf={data.timeframe}
+              currentPhase={phase.phase}
+              mtfPhases={mtfPhases}
+            />
+            {nestedSqueeze && (
+              <div className="flex justify-end">
+                <Badge className="text-[10px] bg-purple-600/20 text-purple-400 border-purple-600/30">
+                  NESTED SQUEEZE
+                </Badge>
+              </div>
+            )}
+            {allDistribution && (
+              <div className="flex justify-end">
+                <Badge className="text-[10px] bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
+                  MTF DISTRIBUTION
+                </Badge>
+              </div>
+            )}
+            {allAccumulation && (
+              <div className="flex justify-end">
+                <Badge className="text-[10px] bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
+                  MTF ACCUMULATION
+                </Badge>
+              </div>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
+  )
+}
+
+function MtfPhaseRow({
+  currentTf,
+  currentPhase,
+  mtfPhases,
+}: {
+  currentTf: string
+  currentPhase: Phase
+  mtfPhases: Record<string, MtfPhaseEntry>
+}) {
+  const entries = [
+    { tf: currentTf, phase: currentPhase, osc: null as number | null, isCurrent: true },
+    ...Object.entries(mtfPhases).map(([tf, p]) => ({
+      tf,
+      phase: p.phase,
+      osc: p.oscillator,
+      isCurrent: false,
+    })),
+  ]
+
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">MTF</span>
+      <div className="flex items-center gap-1">
+        {entries.map(({ tf, phase, osc, isCurrent }) => (
+          <div
+            key={tf}
+            className={cn(
+              "flex items-center gap-1 rounded px-1.5 py-0.5",
+              isCurrent ? "ring-1 ring-primary/40 bg-primary/5" : "bg-muted/30"
+            )}
+            title={osc != null ? `${fmt(osc)}` : undefined}
+          >
+            <div className={cn("size-2 rounded-full", phaseDotColor(phase))} />
+            <span className="text-[10px] font-mono">{TF_LABELS[tf] ?? tf}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
