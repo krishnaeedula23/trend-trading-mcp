@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { GreenFlag, Grade } from "@/lib/types"
+import type { GreenFlag, Grade, RibbonState, MtfRibbonEntry } from "@/lib/types"
 
 function gradeStyle(grade: Grade): string {
   switch (grade) {
@@ -32,11 +32,35 @@ function formatFlagName(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-interface GreenFlagChecklistProps {
-  greenFlag: GreenFlag
+const TF_LABELS: Record<string, string> = {
+  "1m": "1m", "5m": "5m", "15m": "15m",
+  "1h": "1H", "4h": "4H", "1d": "1D", "1w": "1W",
 }
 
-export function GreenFlagChecklist({ greenFlag }: GreenFlagChecklistProps) {
+function ribbonDotColor(state: RibbonState): string {
+  switch (state) {
+    case "bullish":
+      return "bg-emerald-500"
+    case "bearish":
+      return "bg-red-500"
+    case "chopzilla":
+      return "bg-yellow-500"
+  }
+}
+
+interface GreenFlagChecklistProps {
+  greenFlag: GreenFlag
+  currentTimeframe?: string
+  currentRibbonState?: RibbonState
+  mtfRibbons?: Record<string, MtfRibbonEntry>
+}
+
+export function GreenFlagChecklist({
+  greenFlag,
+  currentTimeframe,
+  currentRibbonState,
+  mtfRibbons,
+}: GreenFlagChecklistProps) {
   const [auditOpen, setAuditOpen] = useState(false)
 
   const flagEntries = Object.entries(greenFlag.flags)
@@ -68,35 +92,79 @@ export function GreenFlagChecklist({ greenFlag }: GreenFlagChecklistProps) {
       <CardContent className="space-y-3">
         {/* Flag checklist */}
         <div className="space-y-1.5">
-          {flagEntries.map(([key, value]) => (
-            <div
-              key={key}
-              className="flex items-center gap-2.5 text-sm"
-            >
-              {value === true ? (
-                <div className="flex size-5 items-center justify-center rounded-full bg-emerald-600/20">
-                  <Check className="size-3 text-emerald-400" />
+          {flagEntries.map(([key, value]) => {
+            // MTF aligned row — show inline ribbon dots
+            if (key === "mtf_aligned" && mtfRibbons && currentTimeframe && currentRibbonState) {
+              const entries = [
+                { tf: currentTimeframe, state: currentRibbonState, isCurrent: true },
+                ...Object.entries(mtfRibbons).map(([tf, r]) => ({
+                  tf,
+                  state: r.ribbon_state,
+                  isCurrent: false,
+                })),
+              ]
+              return (
+                <div key={key} className="flex items-center gap-2.5 text-sm">
+                  {value === true ? (
+                    <div className="flex size-5 items-center justify-center rounded-full bg-emerald-600/20">
+                      <Check className="size-3 text-emerald-400" />
+                    </div>
+                  ) : (
+                    <div className="flex size-5 items-center justify-center rounded-full bg-red-600/20">
+                      <X className="size-3 text-red-400" />
+                    </div>
+                  )}
+                  <span className={cn(value ? "text-foreground" : "text-muted-foreground")}>
+                    MTF
+                  </span>
+                  <div className="flex items-center gap-1 ml-1">
+                    {entries.map(({ tf, state, isCurrent }) => (
+                      <div
+                        key={tf}
+                        className={cn(
+                          "flex items-center gap-1 rounded px-1.5 py-0.5",
+                          isCurrent ? "ring-1 ring-primary/40 bg-primary/5" : "bg-muted/30"
+                        )}
+                      >
+                        <div className={cn("size-2 rounded-full", ribbonDotColor(state))} />
+                        <span className="text-[10px] font-mono">{TF_LABELS[tf] ?? tf}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ) : value === false ? (
-                <div className="flex size-5 items-center justify-center rounded-full bg-red-600/20">
-                  <X className="size-3 text-red-400" />
-                </div>
-              ) : (
-                <div className="flex size-5 items-center justify-center rounded-full bg-zinc-600/20">
-                  <span className="text-[10px] text-zinc-500">--</span>
-                </div>
-              )}
-              <span
-                className={cn(
-                  value === true
-                    ? "text-foreground"
-                    : "text-muted-foreground"
-                )}
+              )
+            }
+
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-2.5 text-sm"
               >
-                {formatFlagName(key)}
-              </span>
-            </div>
-          ))}
+                {value === true ? (
+                  <div className="flex size-5 items-center justify-center rounded-full bg-emerald-600/20">
+                    <Check className="size-3 text-emerald-400" />
+                  </div>
+                ) : value === false ? (
+                  <div className="flex size-5 items-center justify-center rounded-full bg-red-600/20">
+                    <X className="size-3 text-red-400" />
+                  </div>
+                ) : (
+                  <div className="flex size-5 items-center justify-center rounded-full bg-zinc-600/20">
+                    <span className="text-[10px] text-zinc-500">--</span>
+                  </div>
+                )}
+                <span
+                  className={cn(
+                    value === true
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {formatFlagName(key)}
+                </span>
+              </div>
+            )
+          })}
         </div>
 
         {/* Recommendation */}

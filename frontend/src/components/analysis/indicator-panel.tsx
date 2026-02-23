@@ -15,7 +15,6 @@ import type {
   Phase,
   StructuralBias,
   ConvictionArrow,
-  MtfRibbonEntry,
 } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -340,89 +339,6 @@ function PriceStructureCard({ data }: { data: TradePlanResponse }) {
   )
 }
 
-// --- MTF Alignment Row ---
-
-const TF_LABELS: Record<string, string> = {
-  "1m": "1m", "5m": "5m", "15m": "15m",
-  "1h": "1H", "4h": "4H", "1d": "1D", "1w": "1W",
-}
-
-function ribbonDotColor(state: RibbonState): string {
-  switch (state) {
-    case "bullish":
-      return "bg-emerald-500 shadow-emerald-500/50"
-    case "bearish":
-      return "bg-red-500 shadow-red-500/50"
-    case "chopzilla":
-      return "bg-yellow-500 shadow-yellow-500/50"
-  }
-}
-
-function MtfAlignmentRow({
-  currentTimeframe,
-  currentRibbon,
-  mtfRibbons,
-}: {
-  currentTimeframe: string
-  currentRibbon: { ribbon_state: RibbonState }
-  mtfRibbons: Record<string, MtfRibbonEntry>
-}) {
-  // Build ordered list: current TF first, then higher TFs
-  const entries: { tf: string; state: RibbonState; isCurrent: boolean }[] = [
-    { tf: currentTimeframe, state: currentRibbon.ribbon_state, isCurrent: true },
-  ]
-  for (const [tf, ribbon] of Object.entries(mtfRibbons)) {
-    entries.push({ tf, state: ribbon.ribbon_state, isCurrent: false })
-  }
-
-  const allAligned = entries.every((e) => e.state === entries[0].state)
-
-  return (
-    <Card className="bg-card/50 border-border/50">
-      <CardContent className="py-3 px-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-xs font-medium text-muted-foreground shrink-0">
-            MTF Ribbon
-          </span>
-          <div className="flex items-center gap-2">
-            {entries.map(({ tf, state, isCurrent }) => (
-              <div
-                key={tf}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5",
-                  isCurrent
-                    ? "bg-primary/10 ring-1 ring-primary/30"
-                    : "bg-muted/30"
-                )}
-              >
-                <div
-                  className={cn(
-                    "size-2.5 rounded-full shadow-[0_0_6px]",
-                    ribbonDotColor(state)
-                  )}
-                />
-                <span className="text-xs font-mono font-medium">
-                  {TF_LABELS[tf] ?? tf}
-                </span>
-              </div>
-            ))}
-          </div>
-          <Badge
-            className={cn(
-              "text-[10px] ml-auto",
-              allAligned
-                ? "bg-emerald-600/20 text-emerald-400 border-emerald-600/30"
-                : "bg-amber-600/20 text-amber-400 border-amber-600/30"
-            )}
-          >
-            {allAligned ? "ALIGNED" : "MIXED"}
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 // --- Main Panel ---
 
 interface IndicatorPanelProps {
@@ -430,23 +346,12 @@ interface IndicatorPanelProps {
 }
 
 export function IndicatorPanel({ data }: IndicatorPanelProps) {
-  const hasMtf = data.mtf_ribbons && Object.keys(data.mtf_ribbons).length > 0
-
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AtrCard data={data} />
-        <RibbonCard data={data} />
-        <PhaseCard data={data} />
-        <PriceStructureCard data={data} />
-      </div>
-      {hasMtf && (
-        <MtfAlignmentRow
-          currentTimeframe={data.timeframe}
-          currentRibbon={data.pivot_ribbon}
-          mtfRibbons={data.mtf_ribbons!}
-        />
-      )}
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AtrCard data={data} />
+      <RibbonCard data={data} />
+      <PhaseCard data={data} />
+      <PriceStructureCard data={data} />
     </div>
   )
 }

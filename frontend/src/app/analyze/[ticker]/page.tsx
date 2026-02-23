@@ -129,7 +129,12 @@ export default function AnalyzeTickerPage({
         <>
           <IndicatorPanel data={data} />
 
-          <GreenFlagChecklist greenFlag={data.green_flag} />
+          <GreenFlagChecklist
+            greenFlag={data.green_flag}
+            currentTimeframe={data.timeframe}
+            currentRibbonState={data.pivot_ribbon.ribbon_state}
+            mtfRibbons={data.mtf_ribbons}
+          />
 
           <div className="flex justify-end">
             <Button
