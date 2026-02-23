@@ -29,6 +29,8 @@ interface ScanControlsProps {
   watchlists: Watchlist[]
   scanning: boolean
   progress: { current: number; total: number }
+  initialTimeframe?: string
+  initialDirection?: string
   onScan: (tickers: string[], timeframe: string, direction: string) => void
   onCancel: () => void
 }
@@ -37,12 +39,14 @@ export function ScanControls({
   watchlists,
   scanning,
   progress,
+  initialTimeframe = "1d",
+  initialDirection = "bullish",
   onScan,
   onCancel,
 }: ScanControlsProps) {
   const [selectedWatchlist, setSelectedWatchlist] = useState<string>("all")
-  const [timeframe, setTimeframe] = useState("1d")
-  const [direction, setDirection] = useState("bullish")
+  const [timeframe, setTimeframe] = useState(initialTimeframe)
+  const [direction, setDirection] = useState(initialDirection)
 
   const allTickers = Array.from(
     new Set(watchlists.flatMap((w) => w.tickers))

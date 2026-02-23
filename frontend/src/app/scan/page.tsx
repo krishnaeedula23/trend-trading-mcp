@@ -4,19 +4,10 @@ import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanResultsTable } from "@/components/scan/scan-results-table"
 import { useWatchlists } from "@/hooks/use-watchlists"
 import { useScan } from "@/hooks/use-scan"
-import { useState } from "react"
 
 export default function ScanPage() {
   const { watchlists, isLoading: watchlistsLoading } = useWatchlists()
-  const { results, scanning, progress, startScan, cancelScan } = useScan()
-  const [lastTf, setLastTf] = useState("1d")
-  const [lastDir, setLastDir] = useState("bullish")
-
-  function handleScan(tickers: string[], timeframe: string, direction: string) {
-    setLastTf(timeframe)
-    setLastDir(direction)
-    startScan(tickers, timeframe, direction)
-  }
+  const { results, scanning, progress, config, startScan, cancelScan } = useScan()
 
   return (
     <div className="space-y-6">
@@ -43,14 +34,16 @@ export default function ScanPage() {
             watchlists={watchlists}
             scanning={scanning}
             progress={progress}
-            onScan={handleScan}
+            initialTimeframe={config.timeframe}
+            initialDirection={config.direction}
+            onScan={startScan}
             onCancel={cancelScan}
           />
 
           <ScanResultsTable
             results={results}
-            timeframe={lastTf}
-            direction={lastDir}
+            timeframe={config.timeframe}
+            direction={config.direction}
           />
         </>
       )}
