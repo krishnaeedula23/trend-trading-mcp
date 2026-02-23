@@ -15,6 +15,7 @@ import type {
   Phase,
   StructuralBias,
   ConvictionArrow,
+  MtfRibbonEntry,
 } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -242,8 +243,73 @@ function RibbonCard({ data }: { data: TradePlanResponse }) {
           label="13/48 Conviction"
           value={convictionLabel(ribbon.last_conviction_type, ribbon.last_conviction_bars_ago)}
         />
+        {data.mtf_ribbons && Object.keys(data.mtf_ribbons).length > 0 && (
+          <>
+            <div className="my-2 h-px bg-border/50" />
+            <MtfRibbonRow
+              currentTf={data.timeframe}
+              currentState={ribbon.ribbon_state}
+              mtfRibbons={data.mtf_ribbons}
+            />
+          </>
+        )}
       </CardContent>
     </Card>
+  )
+}
+
+const TF_LABELS: Record<string, string> = {
+  "1m": "1m", "5m": "5m", "15m": "15m",
+  "1h": "1H", "4h": "4H", "1d": "1D", "1w": "1W",
+}
+
+function mtfDotColor(state: RibbonState): string {
+  switch (state) {
+    case "bullish":
+      return "bg-emerald-500"
+    case "bearish":
+      return "bg-red-500"
+    case "chopzilla":
+      return "bg-yellow-500"
+  }
+}
+
+function MtfRibbonRow({
+  currentTf,
+  currentState,
+  mtfRibbons,
+}: {
+  currentTf: string
+  currentState: RibbonState
+  mtfRibbons: Record<string, MtfRibbonEntry>
+}) {
+  const entries = [
+    { tf: currentTf, state: currentState, isCurrent: true },
+    ...Object.entries(mtfRibbons).map(([tf, r]) => ({
+      tf,
+      state: r.ribbon_state,
+      isCurrent: false,
+    })),
+  ]
+
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">MTF</span>
+      <div className="flex items-center gap-1">
+        {entries.map(({ tf, state, isCurrent }) => (
+          <div
+            key={tf}
+            className={cn(
+              "flex items-center gap-1 rounded px-1.5 py-0.5",
+              isCurrent ? "ring-1 ring-primary/40 bg-primary/5" : "bg-muted/30"
+            )}
+          >
+            <div className={cn("size-2 rounded-full", mtfDotColor(state))} />
+            <span className="text-[10px] font-mono">{TF_LABELS[tf] ?? tf}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
