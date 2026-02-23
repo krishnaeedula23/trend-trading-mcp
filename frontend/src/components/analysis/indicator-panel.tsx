@@ -700,8 +700,6 @@ function PriceStructureCard({ data }: { data: TradePlanResponse }) {
         <div className="my-2 h-px bg-border/50" />
         {kp?.pqc != null && <PivotRow label="Prev Qtr Pivot" value={kp.pqc} color={pivotColor(kp.pqc)} />}
         {kp?.pyc != null && <PivotRow label="Prev Yr Pivot" value={kp.pyc} color={pivotColor(kp.pyc)} />}
-        <div className="my-2 h-px bg-border/50" />
-        <DataRow label="Gap" value={formatLabel(ps.gap_scenario)} />
         {data.open_gaps && data.open_gaps.length > 0 && (
           <>
             <div className="my-2 h-px bg-border/50" />
