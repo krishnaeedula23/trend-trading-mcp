@@ -33,6 +33,7 @@ export async function railwayFetch(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: "no-store",
   });
 
   if (!res.ok) {
