@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.endpoints import options, satyland, schwab
+from api.endpoints import iv_metrics, options, satyland, schwab
 
 # If SCHWAB_TOKEN_B64 is set (Railway deployment), bootstrap the token file
 # from the env var — but only if no token file exists yet (e.g. first deploy
@@ -60,6 +60,7 @@ app.add_middleware(
 app.include_router(schwab.router)
 app.include_router(satyland.router)
 app.include_router(options.router)
+app.include_router(iv_metrics.router)
 
 
 @app.get("/health", tags=["meta"])

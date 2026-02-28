@@ -5,8 +5,10 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useDailyPlan } from "@/hooks/use-daily-plan"
+import { useOptionsData } from "@/hooks/use-options-data"
 import { VixStatusBar } from "./vix-status-bar"
 import { DirectionalPlan } from "./directional-plan"
+import { OptionsDataSection } from "./options-data-section"
 import { InstrumentPanel } from "./instrument-panel"
 import { TradePlanSkeleton } from "./trade-plan-skeleton"
 
@@ -55,6 +57,7 @@ function sessionColor(session: string): string {
 
 export function TradePlanPage() {
   const { data, isLoading, isRefreshing, error, refresh } = useDailyPlan()
+  const optionsData = useOptionsData()
 
   if (isLoading || (isRefreshing && !data)) {
     return <TradePlanSkeleton />
@@ -123,6 +126,9 @@ export function TradePlanPage() {
 
       {/* Directional Plan */}
       <DirectionalPlan instruments={data.instruments} />
+
+      {/* Options Data — IV, IV Rank, IV Percentile, Expected Move */}
+      <OptionsDataSection data={optionsData.data} isLoading={optionsData.isLoading} />
 
       {/* Instrument Panels — two-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -3,7 +3,12 @@
 // Uses RAILWAY_API_URL env var (e.g. "https://your-app.railway.app").
 // ---------------------------------------------------------------------------
 
-import type { CalculateResponse, TradePlanResponse } from "./types";
+import type {
+  AtmStraddle,
+  CalculateResponse,
+  IvMetrics,
+  TradePlanResponse,
+} from "./types";
 import { RailwayError } from "./errors";
 
 function getBaseUrl(): string {
@@ -95,4 +100,28 @@ export async function getQuote(
 ): Promise<Record<string, unknown>> {
   const res = await railwayFetch("/api/schwab/quote", { ticker });
   return res.json() as Promise<Record<string, unknown>>;
+}
+
+/**
+ * POST /api/options/atm-straddle — ATM straddle pricing + expected move + IV.
+ */
+export async function getAtmStraddle(
+  ticker: string,
+  strikeCount: number = 10
+): Promise<AtmStraddle> {
+  const res = await railwayFetch("/api/options/atm-straddle", {
+    ticker,
+    strike_count: strikeCount,
+  });
+  return res.json() as Promise<AtmStraddle>;
+}
+
+/**
+ * POST /api/options/iv-metrics — IV Rank + IV Percentile from VIX history.
+ */
+export async function getIvMetrics(
+  ticker: string
+): Promise<IvMetrics> {
+  const res = await railwayFetch("/api/options/iv-metrics", { ticker });
+  return res.json() as Promise<IvMetrics>;
 }

@@ -77,6 +77,11 @@ async def atm_straddle(req: TickerRequest):
     expected_move = round(straddle_price * 0.85, 2)
     expected_move_pct = round(expected_move / spot * 100, 2) if spot > 0 else 0.0
 
+    # Extract per-contract implied volatility (Schwab field: "volatility" or "impliedVolatility")
+    call_iv = float(call.get("volatility", call.get("impliedVolatility", 0)) or 0)
+    put_iv = float(put.get("volatility", put.get("impliedVolatility", 0)) or 0)
+    atm_iv = (call_iv + put_iv) / 2 if (call_iv and put_iv) else call_iv or put_iv
+
     return {
         "ticker": req.ticker.upper(),
         "spot": spot,
@@ -88,6 +93,9 @@ async def atm_straddle(req: TickerRequest):
         "expected_move_pct": expected_move_pct,
         "expiration": call.get("expirationDate", ""),
         "days_to_expiry": call.get("daysToExpiration", 0),
+        "call_iv": round(call_iv, 4),
+        "put_iv": round(put_iv, 4),
+        "atm_iv": round(atm_iv, 4),
     }
 
 

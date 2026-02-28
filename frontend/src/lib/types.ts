@@ -288,6 +288,35 @@ export interface BatchCalculateResponse {
   results: BatchResultItem[];
 }
 
+// --- ATM Straddle (POST /api/options/atm-straddle) ---
+
+export interface AtmStraddle {
+  ticker: string
+  spot: number
+  atm_strike: number
+  call_price: number
+  put_price: number
+  straddle_price: number
+  expected_move: number
+  expected_move_pct: number
+  expiration: string
+  days_to_expiry: number
+  call_iv: number        // ATM call implied volatility (decimal, e.g. 0.1825)
+  put_iv: number         // ATM put implied volatility (decimal)
+  atm_iv: number         // Average of call/put IV (decimal)
+}
+
+// --- IV Metrics (POST /api/options/iv-metrics) ---
+
+export interface IvMetrics {
+  ticker: string
+  current_iv: number     // Current VIX value
+  iv_rank: number        // 0-100
+  iv_percentile: number  // 0-100
+  high_52w: number
+  low_52w: number
+}
+
 // --- Watchlist (Supabase row) ---
 
 export interface Watchlist {
