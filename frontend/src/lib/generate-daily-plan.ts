@@ -56,9 +56,11 @@ export async function generateDailyPlan(
 
   // Always use current close — plan is generated when market is closed
   // (after close or premarket), so the last bar is settled.
-  // Force trading_mode: "day" so ATR levels use daily bars (not monthly/swing).
-  // This trade plan is for day trading SPY/SPX.
-  const ucc = { use_current_close: true, trading_mode: "day" }
+  const ucc = { use_current_close: true }
+  // Force trading_mode: "day" for the daily trade-plan call so ATR levels
+  // use daily bars (not monthly/swing). Only applies to getTradePlan("1d").
+  // Other timeframes (1h, 15m, 1w) use their natural mode mapping.
+  const dayPlanOpts = { use_current_close: true, trading_mode: "day" }
 
   // --- Fetch VIX ---
   let vix: VixSnapshot = {
@@ -85,8 +87,10 @@ export async function generateDailyPlan(
   for (const inst of INSTRUMENTS) {
     try {
       // 4 parallel calls per instrument (same ticker = no contamination)
+      // Only the daily trade-plan uses trading_mode: "day" for tight ATR levels.
+      // Hourly, 15m, and weekly use default mode mapping for their timeframe.
       const [daily, hourly, fifteenMin, weekly] = await Promise.all([
-        getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined, ucc),
+        getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined, dayPlanOpts),
         calculateIndicators(inst.ticker, "1h", ucc),
         calculateIndicators(inst.ticker, "15m", ucc),
         calculateIndicators(inst.ticker, "1w", ucc),
