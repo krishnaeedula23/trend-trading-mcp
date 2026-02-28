@@ -56,7 +56,9 @@ export async function generateDailyPlan(
 
   // Always use current close — plan is generated when market is closed
   // (after close or premarket), so the last bar is settled.
-  const ucc = { use_current_close: true }
+  // Force trading_mode: "day" so ATR levels use daily bars (not monthly/swing).
+  // This trade plan is for day trading SPY/SPX.
+  const ucc = { use_current_close: true, trading_mode: "day" }
 
   // --- Fetch VIX ---
   let vix: VixSnapshot = {

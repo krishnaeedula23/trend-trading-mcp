@@ -79,7 +79,7 @@ export async function getTradePlan(
   timeframe: string = "1d",
   direction: string = "bullish",
   vix?: number,
-  opts?: { use_current_close?: boolean }
+  opts?: { use_current_close?: boolean; trading_mode?: string }
 ): Promise<TradePlanResponse> {
   const body: Record<string, unknown> = { ticker, timeframe, direction };
   if (vix !== undefined) {
@@ -87,6 +87,9 @@ export async function getTradePlan(
   }
   if (opts?.use_current_close !== undefined) {
     body.use_current_close = opts.use_current_close;
+  }
+  if (opts?.trading_mode !== undefined) {
+    body.trading_mode = opts.trading_mode;
   }
   const res = await railwayFetch("/api/satyland/trade-plan", body);
   return res.json() as Promise<TradePlanResponse>;
