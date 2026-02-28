@@ -10,6 +10,7 @@ import {
   List,
   Bell,
   TrendingUp,
+  BarChart3,
   Menu,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -27,6 +28,7 @@ import { Separator } from "@/components/ui/separator"
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Trade Plan", href: "/trade-plan", icon: BarChart3 },
   { label: "Analyze", href: "/analyze", icon: Search },
   { label: "Scan", href: "/scan", icon: Radar },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },

@@ -8,6 +8,7 @@ import { MobileSidebar } from "@/components/layout/sidebar"
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/trade-plan": "Daily Trade Plan",
   "/analyze": "Analyze",
   "/ideas": "Ideas",
   "/alerts": "Alerts",
