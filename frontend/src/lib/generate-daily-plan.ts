@@ -75,13 +75,16 @@ export async function generateDailyPlan(
     errors.push({ ticker: VIX_TICKER, error: String(err) })
   }
 
-  // --- Fetch instruments in parallel ---
+  // --- Fetch instruments sequentially ---
+  // Process one instrument at a time to avoid yfinance data contamination
+  // on Railway when parallel requests download different tickers concurrently.
+  // Within each instrument, the 4 timeframe calls are safe to run in parallel
+  // since they all use the same ticker.
   const instrumentPlans: InstrumentPlan[] = []
 
-  const instrumentPromises = INSTRUMENTS.map(async (inst) => {
+  for (const inst of INSTRUMENTS) {
     try {
-      // 4 parallel calls per instrument — use_current_close=true since
-      // the plan is always generated when market is closed.
+      // 4 parallel calls per instrument (same ticker = no contamination)
       const [daily, hourly, fifteenMin, weekly] = await Promise.all([
         getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined, ucc),
         calculateIndicators(inst.ticker, "1h", ucc),
@@ -96,7 +99,7 @@ export async function generateDailyPlan(
         weekly,
       )
 
-      return {
+      instrumentPlans.push({
         ticker: inst.ticker,
         displayName: inst.displayName,
         daily: daily as TradePlanResponse,
@@ -104,16 +107,10 @@ export async function generateDailyPlan(
         fifteenMin,
         weekly,
         targets,
-      } satisfies InstrumentPlan
+      })
     } catch (err) {
       errors.push({ ticker: inst.ticker, error: String(err) })
-      return null
     }
-  })
-
-  const results = await Promise.all(instrumentPromises)
-  for (const r of results) {
-    if (r) instrumentPlans.push(r)
   }
 
   // --- Write to Supabase ---

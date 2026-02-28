@@ -5,7 +5,7 @@ import math
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from api.integrations.schwab.client import get_client
+from api.integrations.schwab.client import get_option_chain
 
 router = APIRouter(prefix="/api/options", tags=["options"])
 
@@ -53,7 +53,7 @@ async def atm_straddle(req: TickerRequest):
     Expected Move = Straddle Price × 0.85
     """
     try:
-        chain = get_client().get_options_chain(req.ticker, strike_count=req.strike_count)
+        chain = get_option_chain(req.ticker, strike_count=req.strike_count)
     except RuntimeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
@@ -109,7 +109,7 @@ async def gamma_exposure(req: GEXRequest):
     Negative GEX = dealers are short gamma (amplifying)
     """
     try:
-        chain = get_client().get_options_chain(req.ticker, strike_count=req.strike_count)
+        chain = get_option_chain(req.ticker, strike_count=req.strike_count)
     except RuntimeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
