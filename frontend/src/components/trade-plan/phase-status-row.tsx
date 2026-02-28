@@ -23,7 +23,7 @@ export function PhaseStatusRow({ plan }: { plan: InstrumentPlan }) {
     { label: "15m", phase: plan.fifteenMin.phase_oscillator },
     { label: "1H", phase: plan.hourly.phase_oscillator },
     { label: "1D", phase: plan.daily.phase_oscillator },
-    { label: "1W", phase: plan.weekly.phase_oscillator },
+    ...(plan.weekly ? [{ label: "1W", phase: plan.weekly.phase_oscillator }] : []),
   ]
 
   return (

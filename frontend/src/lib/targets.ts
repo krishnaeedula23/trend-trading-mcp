@@ -24,7 +24,7 @@ function collectLevels(
   daily: TradePlanResponse,
   hourly: CalculateResponse,
   fifteenMin: CalculateResponse,
-  weekly: CalculateResponse,
+  weekly: CalculateResponse | null,
 ): RawLevel[] {
   const levels: RawLevel[] = []
 
@@ -57,7 +57,7 @@ function collectLevels(
   // --- EMAs across all timeframes ---
   const emaNames = ["ema8", "ema13", "ema21", "ema48", "ema200"] as const
   const tfData: { data: CalculateResponse; label: string }[] = [
-    { data: weekly, label: "1W" },
+    ...(weekly ? [{ data: weekly, label: "1W" }] : []),
     { data: daily, label: "1D" },
     { data: hourly, label: "1H" },
     { data: fifteenMin, label: "15m" },
@@ -159,7 +159,7 @@ export function computeTargets(
   daily: TradePlanResponse,
   hourly: CalculateResponse,
   fifteenMin: CalculateResponse,
-  weekly: CalculateResponse,
+  weekly: CalculateResponse | null,
 ): { upside: Target[]; downside: Target[] } {
   const currentPrice = daily.atr_levels.current_price
   const allLevels = collectLevels(daily, hourly, fifteenMin, weekly)

@@ -86,15 +86,23 @@ export async function generateDailyPlan(
 
   for (const inst of INSTRUMENTS) {
     try {
-      // 4 parallel calls per instrument (same ticker = no contamination)
+      // 3 required calls per instrument (same ticker = no contamination).
       // Only the daily trade-plan uses trading_mode: "day" for tight ATR levels.
-      // Hourly, 15m, and weekly use default mode mapping for their timeframe.
-      const [daily, hourly, fifteenMin, weekly] = await Promise.all([
+      // Hourly and 15m use default mode mapping for their timeframe.
+      const [daily, hourly, fifteenMin] = await Promise.all([
         getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined, dayPlanOpts),
         calculateIndicators(inst.ticker, "1h", ucc),
         calculateIndicators(inst.ticker, "15m", ucc),
-        calculateIndicators(inst.ticker, "1w", ucc),
       ])
+
+      // Weekly is optional — position-mode quarterly data may not be available
+      // for all tickers (e.g. ^GSPC on yfinance). Fetch independently.
+      let weekly: CalculateResponse | null = null
+      try {
+        weekly = await calculateIndicators(inst.ticker, "1w", ucc)
+      } catch (weeklyErr) {
+        errors.push({ ticker: inst.ticker, error: `Weekly: ${String(weeklyErr)}` })
+      }
 
       const targets = computeTargets(
         daily as TradePlanResponse,

@@ -38,7 +38,7 @@ export interface InstrumentPlan {
   daily: TradePlanResponse
   hourly: CalculateResponse
   fifteenMin: CalculateResponse
-  weekly: CalculateResponse
+  weekly: CalculateResponse | null
   targets: { upside: Target[]; downside: Target[] }
 }
 
@@ -72,7 +72,7 @@ export interface DailyPlanRow {
   daily: TradePlanResponse
   hourly: CalculateResponse
   fifteen_min: CalculateResponse
-  weekly: CalculateResponse
+  weekly: CalculateResponse | null
   vix: VixSnapshot | null
   targets: { upside: Target[]; downside: Target[] } | null
 }

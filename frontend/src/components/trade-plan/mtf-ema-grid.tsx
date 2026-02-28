@@ -12,7 +12,7 @@ const TF_ROWS: { key: keyof Pick<InstrumentPlan, "weekly" | "daily" | "hourly" |
   { key: "daily", label: "1D" },
   { key: "hourly", label: "1H" },
   { key: "fifteenMin", label: "15m" },
-]
+] as const
 
 const EMA_COLS = ["ema8", "ema13", "ema21", "ema48", "ema200"] as const
 
@@ -37,7 +37,9 @@ export function MtfEmaGrid({ plan }: { plan: InstrumentPlan }) {
         </thead>
         <tbody>
           {TF_ROWS.map(({ key, label }) => {
-            const data: CalculateResponse = key === "daily" ? plan.daily : plan[key]
+            const raw = key === "daily" ? plan.daily : plan[key]
+            if (!raw) return null // skip if weekly is null
+            const data: CalculateResponse = raw
             const ribbon = data.pivot_ribbon
             return (
               <tr key={key} className="border-b border-border/20">
