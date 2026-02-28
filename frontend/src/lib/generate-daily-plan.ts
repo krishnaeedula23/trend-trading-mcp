@@ -54,6 +54,10 @@ export async function generateDailyPlan(
   const now = new Date().toISOString()
   const errors: { ticker: string; error: string }[] = []
 
+  // Always use current close — plan is generated when market is closed
+  // (after close or premarket), so the last bar is settled.
+  const ucc = { use_current_close: true }
+
   // --- Fetch VIX ---
   let vix: VixSnapshot = {
     price: 0,
@@ -63,7 +67,7 @@ export async function generateDailyPlan(
     keyLevel: "N/A",
   }
   try {
-    const vixData = await calculateIndicators(VIX_TICKER, "1d")
+    const vixData = await calculateIndicators(VIX_TICKER, "1d", ucc)
     vix = buildVixSnapshot(vixData)
   } catch (err) {
     errors.push({ ticker: VIX_TICKER, error: String(err) })
@@ -74,12 +78,13 @@ export async function generateDailyPlan(
 
   const instrumentPromises = INSTRUMENTS.map(async (inst) => {
     try {
-      // 4 parallel calls per instrument
+      // 4 parallel calls per instrument — use_current_close=true since
+      // the plan is always generated when market is closed.
       const [daily, hourly, fifteenMin, weekly] = await Promise.all([
-        getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined),
-        calculateIndicators(inst.ticker, "1h"),
-        calculateIndicators(inst.ticker, "15m"),
-        calculateIndicators(inst.ticker, "1w"),
+        getTradePlan(inst.ticker, "1d", "bullish", vix.price || undefined, ucc),
+        calculateIndicators(inst.ticker, "1h", ucc),
+        calculateIndicators(inst.ticker, "15m", ucc),
+        calculateIndicators(inst.ticker, "1w", ucc),
       ])
 
       const targets = computeTargets(

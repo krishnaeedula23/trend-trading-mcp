@@ -27,7 +27,7 @@ export function DirectionalPlan({
               <div key={inst.ticker} className="flex items-center gap-1.5 text-sm">
                 <span className="font-medium">{inst.displayName}</span>
                 <span className="font-mono text-emerald-400">
-                  ${fmt(entry)}c
+                  ${fmt(entry)}
                 </span>
                 {targets.map((t, i) => (
                   <span key={i} className="text-muted-foreground">
@@ -59,7 +59,7 @@ export function DirectionalPlan({
               <div key={inst.ticker} className="flex items-center gap-1.5 text-sm">
                 <span className="font-medium">{inst.displayName}</span>
                 <span className="font-mono text-red-400">
-                  ${fmt(entry)}p
+                  ${fmt(entry)}
                 </span>
                 {targets.map((t, i) => (
                   <span key={i} className="text-muted-foreground">

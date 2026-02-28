@@ -55,12 +55,14 @@ export async function railwayFetch(
  */
 export async function calculateIndicators(
   ticker: string,
-  timeframe: string = "1d"
+  timeframe: string = "1d",
+  opts?: { use_current_close?: boolean }
 ): Promise<CalculateResponse> {
-  const res = await railwayFetch("/api/satyland/calculate", {
-    ticker,
-    timeframe,
-  });
+  const body: Record<string, unknown> = { ticker, timeframe };
+  if (opts?.use_current_close !== undefined) {
+    body.use_current_close = opts.use_current_close;
+  }
+  const res = await railwayFetch("/api/satyland/calculate", body);
   return res.json() as Promise<CalculateResponse>;
 }
 
@@ -71,11 +73,15 @@ export async function getTradePlan(
   ticker: string,
   timeframe: string = "1d",
   direction: string = "bullish",
-  vix?: number
+  vix?: number,
+  opts?: { use_current_close?: boolean }
 ): Promise<TradePlanResponse> {
   const body: Record<string, unknown> = { ticker, timeframe, direction };
   if (vix !== undefined) {
     body.vix = vix;
+  }
+  if (opts?.use_current_close !== undefined) {
+    body.use_current_close = opts.use_current_close;
   }
   const res = await railwayFetch("/api/satyland/trade-plan", body);
   return res.json() as Promise<TradePlanResponse>;
