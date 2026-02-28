@@ -41,8 +41,12 @@ function collectLevels(
   const lvls = atr.levels || {}
   add(lvls.golden_gate_bull?.price, "Golden Gate Bull", "ATR 1D")
   add(lvls.golden_gate_bear?.price, "Golden Gate Bear", "ATR 1D")
+  add(lvls.mid_50_bull?.price, "Mid 50 Bull", "ATR 1D")
+  add(lvls.mid_50_bear?.price, "Mid 50 Bear", "ATR 1D")
   add(lvls.mid_range_bull?.price, "Mid Range Bull", "ATR 1D")
   add(lvls.mid_range_bear?.price, "Mid Range Bear", "ATR 1D")
+  add(lvls.fib_786_bull?.price, "Fib 786 Bull", "ATR 1D")
+  add(lvls.fib_786_bear?.price, "Fib 786 Bear", "ATR 1D")
   add(lvls.full_range_bull?.price, "Full Range Bull", "ATR 1D")
   add(lvls.full_range_bear?.price, "Full Range Bear", "ATR 1D")
 
@@ -141,12 +145,10 @@ function clusterLevels(
     }
   })
 
-  // Sort: highest confluence count first, then by proximity (already in order)
-  targets.sort((a, b) => {
-    if (b.confluenceCount !== a.confluenceCount) return b.confluenceCount - a.confluenceCount
-    return 0 // maintain proximity order from earlier sort
-  })
-
+  // Targets are already in price-proximity order (ascending for up, descending for down)
+  // from the initial sort. We keep that order — the DirectionalPlan shows T1 → T2 → T3
+  // nearest to farthest from current price. Confluence info is attached but doesn't
+  // change the ordering.
   return targets.slice(0, 3)
 }
 

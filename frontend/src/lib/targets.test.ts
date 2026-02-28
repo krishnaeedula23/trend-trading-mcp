@@ -114,14 +114,18 @@ function makeTradePlanResponse(overrides: Partial<TradePlanResponse> = {}): Trad
     atr_levels: {
       ...base.atr_levels,
       levels: {
-        call_trigger: { price: 610, pct: "10%", fib: 0.1 },
-        golden_gate_bull: { price: 614, pct: "38.2%", fib: 0.382 },
-        mid_range_bull: { price: 618, pct: "61.8%", fib: 0.618 },
-        full_range_bull: { price: 623, pct: "100%", fib: 1.0 },
-        put_trigger: { price: 590, pct: "10%", fib: 0.1 },
-        golden_gate_bear: { price: 586, pct: "38.2%", fib: 0.382 },
-        mid_range_bear: { price: 582, pct: "61.8%", fib: 0.618 },
-        full_range_bear: { price: 577, pct: "100%", fib: 1.0 },
+        trigger_bull: { price: 610, pct: "+23.6%", fib: 0.236 },
+        trigger_bear: { price: 590, pct: "-23.6%", fib: 0.236 },
+        golden_gate_bull: { price: 614, pct: "+38.2%", fib: 0.382 },
+        golden_gate_bear: { price: 586, pct: "-38.2%", fib: 0.382 },
+        mid_50_bull: { price: 616, pct: "+50%", fib: 0.5 },
+        mid_50_bear: { price: 584, pct: "-50%", fib: 0.5 },
+        mid_range_bull: { price: 618, pct: "+61.8%", fib: 0.618 },
+        mid_range_bear: { price: 582, pct: "-61.8%", fib: 0.618 },
+        fib_786_bull: { price: 621, pct: "+78.6%", fib: 0.786 },
+        fib_786_bear: { price: 579, pct: "-78.6%", fib: 0.786 },
+        full_range_bull: { price: 623, pct: "+100%", fib: 1.0 },
+        full_range_bear: { price: 577, pct: "-100%", fib: 1.0 },
       },
     },
     ...overrides,
@@ -171,7 +175,7 @@ describe("collectLevels", () => {
 
     const levels = collectLevels(daily, hourly, fifteenMin, weekly)
 
-    // Should have: 8 ATR fibs + 2 hourly triggers + 20 EMAs (5x4) + 2 structure (PDH/PDL) + 8 pivots = 40
+    // Should have: 12 ATR fibs (including mid_50 + fib_786) + 2 hourly triggers + 20 EMAs + 2 structure + 8 pivots = 44
     expect(levels.length).toBeGreaterThanOrEqual(30)
 
     // Check ATR levels are present
@@ -192,6 +196,31 @@ describe("collectLevels", () => {
     const pwh = levels.find((l) => l.label === "PWH")
     expect(pwh).toBeDefined()
     expect(pwh!.price).toBe(612)
+  })
+
+  it("includes mid_50 and fib_786 ATR levels", () => {
+    const daily = makeTradePlanResponse()
+    const hourly = makeCalculateResponse()
+    const fifteenMin = makeCalculateResponse()
+    const weekly = makeCalculateResponse()
+
+    const levels = collectLevels(daily, hourly, fifteenMin, weekly)
+
+    const mid50Bull = levels.find((l) => l.label === "Mid 50 Bull")
+    expect(mid50Bull).toBeDefined()
+    expect(mid50Bull!.price).toBe(616)
+
+    const mid50Bear = levels.find((l) => l.label === "Mid 50 Bear")
+    expect(mid50Bear).toBeDefined()
+    expect(mid50Bear!.price).toBe(584)
+
+    const fib786Bull = levels.find((l) => l.label === "Fib 786 Bull")
+    expect(fib786Bull).toBeDefined()
+    expect(fib786Bull!.price).toBe(621)
+
+    const fib786Bear = levels.find((l) => l.label === "Fib 786 Bear")
+    expect(fib786Bear).toBeDefined()
+    expect(fib786Bear!.price).toBe(579)
   })
 
   it("skips null values gracefully", () => {
@@ -226,7 +255,7 @@ describe("clusterLevels", () => {
     const targets = clusterLevels(levels, "up")
 
     expect(targets.length).toBe(3)
-    // First target should be the cluster with highest confluence
+    // The 610 cluster is nearest to price and has confluence
     const clustered = targets.find((t) => t.confluenceCount === 2)
     expect(clustered).toBeDefined()
     expect(clustered!.label).toBe("Call Trigger") // ATR has higher weight
@@ -259,6 +288,29 @@ describe("clusterLevels", () => {
     // Downside: sorted descending (closest to price first)
     expect(targets.length).toBe(3)
   })
+
+  it("sorts by price proximity, not confluence count", () => {
+    // Scenario: far-away level has 3 confluences, nearby level has 1
+    // Target ordering should still be by price proximity
+    const levels: RawLevel[] = [
+      // Close to current price — 1 level, no confluence
+      { price: 610, label: "Call Trigger", source: "ATR 1D" },
+      // Far from current price — 3 levels clustered = high confluence
+      { price: 630, label: "Full Range Bull", source: "ATR 1D" },
+      { price: 630.5, label: "PMoH", source: "Pivot" },  // within 0.15%
+      { price: 630.2, label: "EMA200", source: "EMA 1W" }, // within 0.15%
+      // Medium distance — 1 level
+      { price: 620, label: "Mid Range Bull", source: "ATR 1D" },
+    ]
+
+    const targets = clusterLevels(levels, "up")
+
+    // Should be sorted ascending by price: 610, 620, 630
+    expect(targets[0].price).toBe(610)
+    expect(targets[1].price).toBe(620)
+    // The 630 cluster should be last even though it has the highest confluence
+    expect(targets[2].price).toBeGreaterThanOrEqual(630)
+  })
 })
 
 describe("computeTargets", () => {
@@ -287,6 +339,46 @@ describe("computeTargets", () => {
     // Downside prices should all be below current price
     for (const t of downside) {
       expect(t.price).toBeLessThan(605)
+    }
+  })
+
+  it("upside targets sorted ascending by price (nearest first)", () => {
+    const daily = makeTradePlanResponse()
+    const hourly = makeCalculateResponse({
+      atr_levels: {
+        ...makeCalculateResponse().atr_levels,
+        call_trigger: 608,
+        put_trigger: 600,
+      },
+    })
+    const fifteenMin = makeCalculateResponse()
+    const weekly = makeCalculateResponse()
+
+    const { upside } = computeTargets(daily, hourly, fifteenMin, weekly)
+
+    // T1 < T2 < T3 (ascending — closest to current price first)
+    for (let i = 1; i < upside.length; i++) {
+      expect(upside[i].price).toBeGreaterThanOrEqual(upside[i - 1].price)
+    }
+  })
+
+  it("downside targets sorted descending by price (nearest first)", () => {
+    const daily = makeTradePlanResponse()
+    const hourly = makeCalculateResponse({
+      atr_levels: {
+        ...makeCalculateResponse().atr_levels,
+        call_trigger: 608,
+        put_trigger: 600,
+      },
+    })
+    const fifteenMin = makeCalculateResponse()
+    const weekly = makeCalculateResponse()
+
+    const { downside } = computeTargets(daily, hourly, fifteenMin, weekly)
+
+    // T1 > T2 > T3 (descending — closest to current price first)
+    for (let i = 1; i < downside.length; i++) {
+      expect(downside[i].price).toBeLessThanOrEqual(downside[i - 1].price)
     }
   })
 
@@ -326,6 +418,80 @@ describe("computeTargets", () => {
       expect(target).toHaveProperty("confluenceCount")
       expect(typeof target.price).toBe("number")
       expect(Array.isArray(target.confluences)).toBe(true)
+    }
+  })
+
+  it("real-world scenario: SPY-like data with all 12 ATR levels", () => {
+    // Simulates real SPY data where price is inside trigger box
+    const daily = makeTradePlanResponse({
+      atr_levels: {
+        ...makeTradePlanResponse().atr_levels,
+        current_price: 686,
+        pdc: 686,
+        call_trigger: 693.52,
+        put_trigger: 678.46,
+        levels: {
+          trigger_bull:      { price: 693.52, pct: "+23.6%", fib: 0.236 },
+          trigger_bear:      { price: 678.46, pct: "-23.6%", fib: 0.236 },
+          golden_gate_bull:  { price: 698.18, pct: "+38.2%", fib: 0.382 },
+          golden_gate_bear:  { price: 673.80, pct: "-38.2%", fib: 0.382 },
+          mid_50_bull:       { price: 701.94, pct: "+50.0%", fib: 0.5 },
+          mid_50_bear:       { price: 670.04, pct: "-50.0%", fib: 0.5 },
+          mid_range_bull:    { price: 705.71, pct: "+61.8%", fib: 0.618 },
+          mid_range_bear:    { price: 666.27, pct: "-61.8%", fib: 0.618 },
+          fib_786_bull:      { price: 711.07, pct: "+78.6%", fib: 0.786 },
+          fib_786_bear:      { price: 660.91, pct: "-78.6%", fib: 0.786 },
+          full_range_bull:   { price: 717.90, pct: "+100%", fib: 1.0 },
+          full_range_bear:   { price: 654.08, pct: "-100%", fib: 1.0 },
+        },
+      },
+    })
+    const hourly = makeCalculateResponse({
+      atr_levels: {
+        ...makeCalculateResponse().atr_levels,
+        call_trigger: 689.66,
+        put_trigger: 682.32,
+      },
+      pivot_ribbon: {
+        ...makeCalculateResponse().pivot_ribbon,
+        ema8: 685.63, ema13: 686.18, ema21: 686.63, ema48: 686.76, ema200: 689.33,
+      },
+    })
+    const fifteenMin = makeCalculateResponse({
+      pivot_ribbon: {
+        ...makeCalculateResponse().pivot_ribbon,
+        ema8: 684.93, ema13: 684.75, ema21: 684.88, ema48: 685.88, ema200: 687.0,
+      },
+    })
+    const weekly = makeCalculateResponse({
+      pivot_ribbon: {
+        ...makeCalculateResponse().pivot_ribbon,
+        ema8: 686.85, ema13: 684.02, ema21: 676.44, ema48: 646.62, ema200: 535.23,
+      },
+    })
+
+    const { upside, downside } = computeTargets(daily, hourly, fifteenMin, weekly)
+
+    // Upside targets should be ordered ascending (nearest first)
+    for (let i = 1; i < upside.length; i++) {
+      expect(upside[i].price).toBeGreaterThanOrEqual(upside[i - 1].price)
+    }
+
+    // Downside targets should be ordered descending (nearest first)
+    for (let i = 1; i < downside.length; i++) {
+      expect(downside[i].price).toBeLessThanOrEqual(downside[i - 1].price)
+    }
+
+    // Should include ATR extension levels in upside targets
+    const allUpsidePrices = upside.map(t => t.price)
+    // At least one ATR extension should appear (golden_gate_bull=698.18, mid_50_bull=701.94, etc.)
+    const hasAtrExtension = upside.some(t => t.source === "ATR 1D")
+    expect(hasAtrExtension).toBe(true)
+
+    // Downside should include levels below current price
+    expect(downside.length).toBeGreaterThan(0)
+    for (const t of downside) {
+      expect(t.price).toBeLessThan(686)
     }
   })
 })
