@@ -31,6 +31,7 @@ const navItems = [
   { label: "Trade Plan", href: "/trade-plan", icon: BarChart3 },
   { label: "Analyze", href: "/analyze", icon: Search },
   { label: "Scan", href: "/scan", icon: Radar },
+  { label: "Screener", href: "/screener", icon: TrendingUp },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
   { label: "Watchlists", href: "/watchlists", icon: List },
   { label: "Alerts", href: "/alerts", icon: Bell, badge: "Soon" },
