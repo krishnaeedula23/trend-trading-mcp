@@ -1,5 +1,5 @@
 """Tests for the screener orchestrator endpoint."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +49,8 @@ class TestScreenerScan:
             "price_structure": {"pdh": 196, "pdl": 189, "pmh": 200, "pml": 185},
         }
 
-        with patch("api.endpoints.screener.calculate_trade_plan", return_value=mock_trade_plan):
+        with patch("api.endpoints.screener.calculate_trade_plan",
+                    new_callable=AsyncMock, return_value=mock_trade_plan):
             resp = client.post("/api/screener/scan", json={
                 "tickers": ["AAPL"],
                 "timeframe": "1d",
@@ -72,18 +73,18 @@ class TestScreenerScan:
 
     def test_results_sorted_by_grade_then_score(self, client):
         """A+ should come before A, A before B."""
-        with patch("api.endpoints.screener.calculate_trade_plan") as mock_calc:
-            mock_calc.side_effect = [
-                {**_base_plan(), "ticker": "B_STOCK",
-                 "green_flag": {"grade": "B", "score": 3, "max_score": 10,
-                                "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
-                {**_base_plan(), "ticker": "A_PLUS",
-                 "green_flag": {"grade": "A+", "score": 7, "max_score": 10,
-                                "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
-                {**_base_plan(), "ticker": "A_STOCK",
-                 "green_flag": {"grade": "A", "score": 4, "max_score": 10,
-                                "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
-            ]
+        mock = AsyncMock(side_effect=[
+            {**_base_plan(), "ticker": "B_STOCK",
+             "green_flag": {"grade": "B", "score": 3, "max_score": 10,
+                            "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
+            {**_base_plan(), "ticker": "A_PLUS",
+             "green_flag": {"grade": "A+", "score": 7, "max_score": 10,
+                            "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
+            {**_base_plan(), "ticker": "A_STOCK",
+             "green_flag": {"grade": "A", "score": 4, "max_score": 10,
+                            "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""}},
+        ])
+        with patch("api.endpoints.screener.calculate_trade_plan", mock):
             resp = client.post("/api/screener/scan", json={
                 "tickers": ["B_STOCK", "A_PLUS", "A_STOCK"],
                 "timeframe": "1d",
@@ -96,8 +97,8 @@ class TestScreenerScan:
 
     def test_failed_ticker_becomes_skip(self, client):
         """If calculate_trade_plan raises, that ticker should get grade='skip'."""
-        with patch("api.endpoints.screener.calculate_trade_plan") as mock_calc:
-            mock_calc.side_effect = ValueError("No data for FAKE at 1d")
+        mock = AsyncMock(side_effect=ValueError("No data for FAKE at 1d"))
+        with patch("api.endpoints.screener.calculate_trade_plan", mock):
             resp = client.post("/api/screener/scan", json={
                 "tickers": ["FAKE"],
                 "timeframe": "1d",
@@ -111,12 +112,13 @@ class TestScreenerScan:
 
     def test_response_shape(self, client):
         """Verify the ScanResponse shape."""
-        with patch("api.endpoints.screener.calculate_trade_plan", return_value={
+        mock = AsyncMock(return_value={
             **_base_plan(),
             "ticker": "SPY",
             "green_flag": {"grade": "A", "score": 5, "max_score": 10,
                            "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""},
-        }):
+        })
+        with patch("api.endpoints.screener.calculate_trade_plan", mock):
             resp = client.post("/api/screener/scan", json={
                 "tickers": ["SPY"],
                 "timeframe": "1d",
@@ -131,6 +133,25 @@ class TestScreenerScan:
         assert data["total"] == 1
         assert data["scanned"] == 1
         assert data["errors"] == 0
+
+    def test_vix_passed_to_calculate(self, client):
+        """Verify that vix from request is forwarded to calculate_trade_plan."""
+        mock = AsyncMock(return_value={
+            **_base_plan(),
+            "ticker": "SPY",
+            "green_flag": {"grade": "A", "score": 5, "max_score": 10,
+                           "direction": "bullish", "recommendation": "", "flags": {}, "verbal_audit": ""},
+        })
+        with patch("api.endpoints.screener.calculate_trade_plan", mock):
+            resp = client.post("/api/screener/scan", json={
+                "tickers": ["SPY"],
+                "timeframe": "1d",
+                "direction": "bullish",
+                "vix": 15.2,
+            })
+
+        assert resp.status_code == 200
+        mock.assert_called_once_with("SPY", "1d", "bullish", 15.2)
 
 
 def _base_plan() -> dict:
