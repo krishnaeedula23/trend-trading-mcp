@@ -6,6 +6,7 @@ import type { MomentumScanRequest, MomentumScanResponse, MomentumHit } from "@/l
 export interface MomentumScanConfig {
   universes: string[]
   min_price: number
+  custom_tickers?: string[]
 }
 
 interface UseMomentumScanReturn {
@@ -106,6 +107,7 @@ export function useMomentumScan(): UseMomentumScanReturn {
         const body: MomentumScanRequest = {
           universes: newConfig.universes,
           min_price: newConfig.min_price,
+          ...(newConfig.custom_tickers?.length && { custom_tickers: newConfig.custom_tickers }),
         }
 
         const res = await fetch("/api/screener/momentum-scan", {

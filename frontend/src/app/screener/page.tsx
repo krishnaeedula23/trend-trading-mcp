@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { MomentumControls } from "@/components/screener/momentum-controls"
 import { MomentumResultsTable } from "@/components/screener/momentum-results-table"
 import { useMomentumScan } from "@/hooks/use-momentum-scan"
+import { useWatchlists } from "@/hooks/use-watchlists"
 
 function ComingSoon({ name }: { name: string }) {
   return (
@@ -16,6 +17,7 @@ function ComingSoon({ name }: { name: string }) {
 
 export default function ScreenerPage() {
   const { hits, scanning, response, config, error, runScan, cancelScan } = useMomentumScan()
+  const { watchlists } = useWatchlists()
 
   return (
     <div className="space-y-6">
@@ -45,6 +47,7 @@ export default function ScreenerPage() {
             scanning={scanning}
             response={response}
             error={error}
+            watchlists={watchlists}
             initialUniverses={config.universes}
             initialMinPrice={config.min_price}
             onScan={runScan}

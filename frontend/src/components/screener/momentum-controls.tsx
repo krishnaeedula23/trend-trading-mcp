@@ -5,15 +5,16 @@ import { Play, Square, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { MomentumScanResponse } from "@/lib/types"
+import type { MomentumScanResponse, Watchlist } from "@/lib/types"
 
 interface MomentumControlsProps {
   scanning: boolean
   response: MomentumScanResponse | null
   error: string | null
+  watchlists: Watchlist[]
   initialUniverses: string[]
   initialMinPrice: number
-  onScan: (config: { universes: string[]; min_price: number }) => void
+  onScan: (config: { universes: string[]; min_price: number; custom_tickers?: string[] }) => void
   onCancel: () => void
 }
 
@@ -27,12 +28,14 @@ export function MomentumControls({
   scanning,
   response,
   error,
+  watchlists,
   initialUniverses,
   initialMinPrice,
   onScan,
   onCancel,
 }: MomentumControlsProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set(initialUniverses))
+  const [selectedWatchlists, setSelectedWatchlists] = useState<Set<string>>(new Set())
   const [minPrice, setMinPrice] = useState(initialMinPrice)
 
   function toggleUniverse(key: string) {
@@ -44,9 +47,29 @@ export function MomentumControls({
     })
   }
 
+  function toggleWatchlist(id: string) {
+    setSelectedWatchlists((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   function handleRun() {
-    if (selected.size === 0) return
-    onScan({ universes: Array.from(selected), min_price: minPrice })
+    if (selected.size === 0 && selectedWatchlists.size === 0) return
+
+    // Collect tickers from selected watchlists
+    const customTickers = watchlists
+      .filter((w) => selectedWatchlists.has(w.id))
+      .flatMap((w) => w.tickers)
+    const unique = [...new Set(customTickers)]
+
+    onScan({
+      universes: Array.from(selected),
+      min_price: minPrice,
+      ...(unique.length > 0 && { custom_tickers: unique }),
+    })
   }
 
   return (
@@ -70,6 +93,28 @@ export function MomentumControls({
             ))}
           </div>
         </div>
+
+        {/* Watchlist toggles */}
+        {watchlists.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Watchlists</Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {watchlists.map((w) => (
+                <Button
+                  key={w.id}
+                  size="sm"
+                  variant={selectedWatchlists.has(w.id) ? "default" : "outline"}
+                  className="h-7 text-xs"
+                  onClick={() => toggleWatchlist(w.id)}
+                  disabled={scanning}
+                >
+                  {w.name}
+                  <span className="ml-1 text-muted-foreground">({w.tickers.length})</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Min price */}
         <div className="space-y-1.5">
@@ -96,7 +141,7 @@ export function MomentumControls({
               size="sm"
               className="h-7 text-xs"
               onClick={handleRun}
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 && selectedWatchlists.size === 0}
             >
               <Play className="mr-1 size-3" /> Run Scan
             </Button>
