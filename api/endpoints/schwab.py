@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 
 import schwab.auth
 from api.integrations.schwab import client as schwab_client
@@ -47,6 +47,45 @@ async def get_price_history(
     _require_token()
     try:
         return schwab_client.get_price_history(ticker, frequency_type=frequency)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schwab API error: {exc}") from exc
+
+
+@router.post("/quotes")
+async def get_quotes(
+    symbols: list[str] = Body(..., description="List of ticker symbols", max_length=50),
+):
+    """Return batch quotes for up to 50 symbols."""
+    _require_token()
+    try:
+        return schwab_client.get_quotes(symbols)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schwab API error: {exc}") from exc
+
+
+@router.get("/instruments")
+async def get_instruments(
+    query: str = Query(..., description="Search term (symbol or description text)"),
+    projection: str = Query("symbol_search", description="symbol_search | description_search | fundamental"),
+):
+    """Search for instruments by symbol or description."""
+    _require_token()
+    try:
+        return schwab_client.get_instruments(query, projection=projection)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schwab API error: {exc}") from exc
+
+
+@router.get("/movers")
+async def get_movers(
+    index: str = Query("$SPX", description="Market index: $SPX, $DJI, $COMPX, $NYSE, $NASDAQ"),
+    sort_order: str | None = Query(None, description="volume | trades | percent_change_up | percent_change_down"),
+    frequency: int | None = Query(None, description="Change threshold: 0, 1, 5, 10, 30, 60"),
+):
+    """Return top movers for a market index."""
+    _require_token()
+    try:
+        return schwab_client.get_movers(index, sort_order=sort_order, frequency=frequency)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Schwab API error: {exc}") from exc
 

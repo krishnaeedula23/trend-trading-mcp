@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { MobileSidebar } from "@/components/layout/sidebar"
+import { GlobalSearch } from "@/components/global-search"
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -64,6 +65,14 @@ export function Header() {
           className="h-8 pl-8 text-xs"
         />
       </form>
+
+      {/* Cmd+K shortcut hint */}
+      <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+        <span className="text-xs">⌘</span>K
+      </kbd>
+
+      {/* Global search dialog (Cmd+K) */}
+      <GlobalSearch />
     </header>
   )
 }

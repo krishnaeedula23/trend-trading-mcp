@@ -12,6 +12,7 @@ import os
 from typing import Any
 
 import schwab.auth
+import schwab.client
 
 from api.integrations.schwab.token_manager import TOKEN_PATH, token_exists
 
@@ -59,6 +60,73 @@ def get_option_chain(ticker: str, strike_count: int = 10) -> dict[str, Any]:
         strike_count=strike_count,
         include_underlying_quote=True,
     )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_movers(
+    index: str = "$SPX",
+    sort_order: str | None = None,
+    frequency: int | None = None,
+) -> dict[str, Any]:
+    """Top movers for a market index (e.g. $SPX, $DJI, $COMPX)."""
+    kwargs: dict[str, Any] = {}
+    idx_map = {
+        "$SPX": schwab.client.Client.Movers.Index.SPX,
+        "$DJI": schwab.client.Client.Movers.Index.DJI,
+        "$COMPX": schwab.client.Client.Movers.Index.COMPX,
+        "$NYSE": schwab.client.Client.Movers.Index.NYSE,
+        "$NASDAQ": schwab.client.Client.Movers.Index.NASDAQ,
+    }
+    idx = idx_map.get(index.upper(), schwab.client.Client.Movers.Index.SPX)
+
+    if sort_order:
+        order_map = {
+            "volume": schwab.client.Client.Movers.SortOrder.VOLUME,
+            "trades": schwab.client.Client.Movers.SortOrder.TRADES,
+            "percent_change_up": schwab.client.Client.Movers.SortOrder.PERCENT_CHANGE_UP,
+            "percent_change_down": schwab.client.Client.Movers.SortOrder.PERCENT_CHANGE_DOWN,
+        }
+        mapped_order = order_map.get(sort_order.lower())
+        if mapped_order is not None:
+            kwargs["sort_order"] = mapped_order
+    if frequency is not None:
+        freq_map = {
+            0: schwab.client.Client.Movers.Frequency.ZERO,
+            1: schwab.client.Client.Movers.Frequency.ONE,
+            5: schwab.client.Client.Movers.Frequency.FIVE,
+            10: schwab.client.Client.Movers.Frequency.TEN,
+            30: schwab.client.Client.Movers.Frequency.THIRTY,
+            60: schwab.client.Client.Movers.Frequency.SIXTY,
+        }
+        mapped_freq = freq_map.get(frequency)
+        if mapped_freq is not None:
+            kwargs["frequency"] = mapped_freq
+
+    resp = get_client().get_movers(idx, **kwargs)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_quotes(symbols: list[str]) -> dict[str, Any]:
+    """Batch quotes for multiple symbols."""
+    resp = get_client().get_quotes([s.upper() for s in symbols])
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_instruments(query: str, projection: str = "symbol_search") -> dict[str, Any]:
+    """Search for instruments by symbol or description."""
+    proj_map = {
+        "symbol_search": schwab.client.Client.Instrument.Projection.SYMBOL_SEARCH,
+        "symbol_regex": schwab.client.Client.Instrument.Projection.SYMBOL_REGEX,
+        "description_search": schwab.client.Client.Instrument.Projection.DESCRIPTION_SEARCH,
+        "description_regex": schwab.client.Client.Instrument.Projection.DESCRIPTION_REGEX,
+        "search": schwab.client.Client.Instrument.Projection.SEARCH,
+        "fundamental": schwab.client.Client.Instrument.Projection.FUNDAMENTAL,
+    }
+    proj = proj_map.get(projection.lower(), schwab.client.Client.Instrument.Projection.SYMBOL_SEARCH)
+    resp = get_client().get_instruments(query, proj)
     resp.raise_for_status()
     return resp.json()
 
