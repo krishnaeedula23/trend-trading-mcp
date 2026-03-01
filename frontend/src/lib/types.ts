@@ -327,3 +327,41 @@ export interface Watchlist {
   is_default: boolean;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Momentum Scanner
+// ---------------------------------------------------------------------------
+
+export interface MomentumCriterion {
+  label: string
+  pct_change: number
+  threshold: number
+  lookback_days: number
+}
+
+export interface MomentumHit {
+  ticker: string
+  last_close: number
+  criteria_met: MomentumCriterion[]
+  max_pct_change: number
+  weekly_pct: number | null
+  monthly_pct: number | null
+  three_month_pct: number | null
+  six_month_pct: number | null
+}
+
+export interface MomentumScanRequest {
+  universes: string[]
+  min_price: number
+  custom_tickers?: string[]
+}
+
+export interface MomentumScanResponse {
+  hits: MomentumHit[]
+  total_scanned: number
+  total_hits: number
+  total_errors: number
+  skipped_low_price: number
+  scan_duration_seconds: number
+  universes_used: string[]
+}
