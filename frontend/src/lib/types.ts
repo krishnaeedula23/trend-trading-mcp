@@ -365,3 +365,47 @@ export interface MomentumScanResponse {
   scan_duration_seconds: number
   universes_used: string[]
 }
+
+// ---------------------------------------------------------------------------
+// Golden Gate Scanner
+// ---------------------------------------------------------------------------
+
+export type GoldenGateSignalType = "golden_gate" | "call_trigger" | "put_trigger"
+
+export interface GoldenGateHit {
+  ticker: string
+  last_close: number
+  signal: GoldenGateSignalType
+  direction: "bullish" | "bearish"
+  pdc: number
+  atr: number
+  gate_level: number
+  midrange_level: number
+  distance_pct: number
+  atr_status: AtrStatus
+  atr_covered_pct: number
+  trend: Trend
+  trading_mode: TradingMode
+  premarket_high: number | null
+  premarket_low: number | null
+}
+
+export interface GoldenGateScanRequest {
+  universes: string[]
+  trading_mode: TradingMode
+  signal_type: GoldenGateSignalType
+  min_price: number
+  custom_tickers?: string[]
+  include_premarket: boolean
+}
+
+export interface GoldenGateScanResponse {
+  hits: GoldenGateHit[]
+  total_scanned: number
+  total_hits: number
+  total_errors: number
+  skipped_low_price: number
+  scan_duration_seconds: number
+  signal_type: GoldenGateSignalType
+  trading_mode: TradingMode
+}
