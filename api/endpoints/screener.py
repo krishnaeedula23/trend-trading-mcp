@@ -399,6 +399,7 @@ async def momentum_scan(request: MomentumScanRequest) -> MomentumScanResponse:
         tickers,
         period="7mo",
         interval="1d",
+        auto_adjust=True,
         progress=False,
         threads=True,
     )
@@ -414,8 +415,10 @@ async def momentum_scan(request: MomentumScanRequest) -> MomentumScanResponse:
             universes_used=request.universes,
         )
 
-    # Score against momentum criteria
-    hits, errors, skipped = _compute_momentum(raw_df, tickers, request.min_price)
+    # Score against momentum criteria (off event loop — iterates 700+ tickers)
+    hits, errors, skipped = await asyncio.to_thread(
+        _compute_momentum, raw_df, tickers, request.min_price,
+    )
 
     # Sort by max_pct_change descending
     hits.sort(key=lambda h: h.max_pct_change, reverse=True)
