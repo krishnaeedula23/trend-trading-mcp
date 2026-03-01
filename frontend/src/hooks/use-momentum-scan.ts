@@ -13,6 +13,7 @@ interface UseMomentumScanReturn {
   scanning: boolean
   response: MomentumScanResponse | null
   config: MomentumScanConfig
+  error: string | null
   runScan: (config: MomentumScanConfig) => void
   cancelScan: () => void
 }
@@ -70,6 +71,7 @@ export function useMomentumScan(): UseMomentumScanReturn {
   const [scanning, setScanning] = useState(false)
   const [response, setResponse] = useState<MomentumScanResponse | null>(null)
   const [config, setConfig] = useState<MomentumScanConfig>(DEFAULT_CONFIG)
+  const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const hydrated = useRef(false)
 
@@ -96,6 +98,7 @@ export function useMomentumScan(): UseMomentumScanReturn {
 
       setHits([])
       setResponse(null)
+      setError(null)
       saveResponse(null)
       setScanning(true)
 
@@ -114,7 +117,9 @@ export function useMomentumScan(): UseMomentumScanReturn {
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: "Unknown error" }))
-          console.error("Momentum scan failed:", err.error ?? `HTTP ${res.status}`)
+          const msg = err.error ?? `HTTP ${res.status}`
+          console.error("Momentum scan failed:", msg)
+          setError(msg)
           return
         }
 
@@ -124,7 +129,9 @@ export function useMomentumScan(): UseMomentumScanReturn {
         saveResponse(data)
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return
-        console.error("Momentum scan failed:", err)
+        const msg = err instanceof Error ? err.message : "Network error"
+        console.error("Momentum scan failed:", msg)
+        setError(msg)
       } finally {
         setScanning(false)
       }
@@ -137,5 +144,5 @@ export function useMomentumScan(): UseMomentumScanReturn {
     setScanning(false)
   }, [])
 
-  return { hits, scanning, response, config, runScan, cancelScan }
+  return { hits, scanning, response, config, error, runScan, cancelScan }
 }

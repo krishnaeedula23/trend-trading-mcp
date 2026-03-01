@@ -15,7 +15,7 @@ function ComingSoon({ name }: { name: string }) {
 }
 
 export default function ScreenerPage() {
-  const { hits, scanning, response, config, runScan, cancelScan } = useMomentumScan()
+  const { hits, scanning, response, config, error, runScan, cancelScan } = useMomentumScan()
 
   return (
     <div className="space-y-6">
@@ -44,6 +44,7 @@ export default function ScreenerPage() {
           <MomentumControls
             scanning={scanning}
             response={response}
+            error={error}
             initialUniverses={config.universes}
             initialMinPrice={config.min_price}
             onScan={runScan}

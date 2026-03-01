@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Play, Square, Loader2 } from "lucide-react"
+import { Play, Square, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +10,7 @@ import type { MomentumScanResponse } from "@/lib/types"
 interface MomentumControlsProps {
   scanning: boolean
   response: MomentumScanResponse | null
+  error: string | null
   initialUniverses: string[]
   initialMinPrice: number
   onScan: (config: { universes: string[]; min_price: number }) => void
@@ -25,6 +26,7 @@ const UNIVERSE_OPTIONS = [
 export function MomentumControls({
   scanning,
   response,
+  error,
   initialUniverses,
   initialMinPrice,
   onScan,
@@ -107,6 +109,12 @@ export function MomentumControls({
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           Scanning {Array.from(selected).join(" + ")} universe...
+        </div>
+      )}
+      {error && !scanning && (
+        <div className="flex items-center gap-2 text-xs text-red-400">
+          <AlertCircle className="size-3" />
+          Scan failed: {error}
         </div>
       )}
       {response && !scanning && (
