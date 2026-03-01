@@ -58,17 +58,55 @@ P2
 - Consolidate tests location / test suite tiers (fast vs slow), if not already formalized.
 - Clean up unfinished registry/init TODOs: `maverick_mcp/langchain_tools/registry.py`.
 
+## Already Built (Feb 2026)
+
+Significant feature work was shipped outside the formal track process. This section documents what exists as of 2026-02-28 to prevent duplicate work.
+
+### Frontend Pages (Next.js 16 on Vercel)
+
+| Route | Status | Description |
+|-------|--------|-------------|
+| `/` | Done | Home / redirect |
+| `/dashboard` | Done | Overview dashboard |
+| `/analyze` | Done | Ticker input for analysis |
+| `/analyze/[ticker]` | Done | Full trade plan: ATR card, Pivot Ribbon, Phase Oscillator, Green Flag checklist, Key Pivots, Price Structure, Probable Setups, save-to-idea |
+| `/ideas` | Done | Trade ideas list |
+| `/ideas/[id]` | Done | Individual idea detail |
+| `/scan` | Done | Setup detection engine — batch scanning with chunked fetch, session persistence, grade/setup filtering, save-to-idea |
+| `/watchlists` | Done | Full CRUD + batch indicator calculation |
+| `/trade-plan` | Done | Daily trade plan — MTF EMA grid, VIX tracking + premarket delta, Options IV/IVR/IVP/Expected Move, directional T1/T2/T3 targets, strategy guidance engine, premarket levels (PMH/PML), confluence badges |
+
+### Backend Capabilities
+
+| Feature | Status | Key Files |
+|---------|--------|-----------|
+| MTF Pivot Ribbon | Done | `api/indicators/satyland/pivot_ribbon.py` — Higher-TF ribbon dots, 13/48 conviction crossover |
+| MTF Phase Oscillator | Done | `api/indicators/satyland/phase_oscillator.py` — Mean reversion signals, nested squeeze detection |
+| Key Pivot Levels | Done | Weekly, monthly, quarterly, yearly with stacking alignment colors |
+| ATR Analysis | Done | ATR Covered %, Golden Gate zones, Fibonacci extensions |
+| Setup Detection | Done | 7 named setups, gap detection (6-month lookback), 65 Vitest tests |
+| Premarket Data | Done | SPY/VIX 4:00-9:30 AM ET via yfinance pre/post market |
+| Strategy Guidance | Done | Gap interpretation, EM vs ATR confluence, scenario generation |
+| Batch Calculate | Done | `POST /api/satyland/batch-calculate` — runs all indicators for up to 20 tickers in parallel |
+
+### shadcn Components Installed (20+)
+
+`accordion`, `alert`, `badge`, `button`, `card`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `scroll-area`, `select`, `separator`, `skeleton`, `slider`, `sonner`, `switch`, `table`, `tabs`, `textarea`, `tooltip`
+
+### SWR Hooks
+
+`use-trade-plan`, `use-scan`, `use-watchlists`, `use-ideas`, `use-price-structure`, `use-options-data`, `use-premarket`, `use-schwab-quote`
+
 ## Frontend & UI Roadmap
 
-The frontend (`frontend/`) is a Next.js 15 app deployed on Vercel. Current pages: dashboard, analyze, ideas. The following items expand it into a complete trading workstation.
+The frontend (`frontend/`) is a Next.js 16 app deployed on Vercel. Updated status as of 2026-02-28.
 
-### Missing Pages
+### Remaining Pages
 
 | Route | Purpose | Priority |
 |-------|---------|----------|
 | `/screener` | Scan universe with Saty indicators, rank by grade | P0 (see Screener section below) |
 | `/alerts` | Manage price/indicator alerts linked to ideas | P1 |
-| `/watchlists` | CRUD watchlists, batch calculate indicators | P1 |
 | `/settings` | API keys, default timeframe, notification prefs | P2 |
 | `/backtest` | Display VectorBT backtest results from Maverick | P2 |
 

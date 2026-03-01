@@ -3,59 +3,74 @@
 **Track ID:** project-audit-modernization_20260205
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-02-05
-**Status:** [ ] Planning
+**Status:** [~] In Progress
 
 ## Overview
 
-This track focuses on understanding and improving the long-term maintainability of MaverickMCP. Work is primarily research + documentation: a repo audit, a review of the current MCP/FastMCP ecosystem, and a prioritized modernization/refactor plan. No behavior changes are expected unless explicitly called out as optional "quick wins."
+This track focuses on understanding and improving the long-term maintainability of MaverickMCP. Work is primarily research + documentation: a repo audit, a review of the current MCP/FastMCP ecosystem, and a prioritized modernization/refactor plan. No behavior changes are expected unless explicitly called out as optional “quick wins.”
 
-## Start Here Next Session (Safe Wins First)
+## Status Update (2026-02-28)
 
-These are the first steps to execute when you begin implementation work:
+Phases 1-3 completed as research artifacts (audit.md, mcp-fastmcp-research.md, modernization.md). Meanwhile, significant feature work was shipped outside this track that partially fulfills Phase 4 — see “Already Built” notes below.
 
-1. **Pick the golden path** (single supported server entrypoint + transport for Claude Desktop).
-2. **Remove/relocate global side effects** (centralize `logging.basicConfig()` and `load_dotenv()` into a single bootstrap path).
-3. **Re-evaluate FastMCP transport behavior** after upgrading within stable 2.x to see if the SSE trailing-slash monkey-patch can be removed.
-4. **Deprecate alternate router variants** by choosing canonical routers and adding a migration/deprecation note.
-5. **Adopt background tasks** for long-running tools (deep research/backtests) where it improves responsiveness and reduces timeouts.
+## Next Session: Screener Feature (Phase 4)
 
-## Phase 1: Repo Audit (Local)
+Execute these items in order (Items 1+3 can be parallel):
 
-### Tasks
+1. **Wire Schwab bulk methods** — `get_movers`, `get_quotes`, `get_instruments` wrappers + endpoints (Small, 1 session)
+2. **Build screener backend** — `POST /api/screener/scan` orchestrator (Medium, 1 session, depends on #1)
+3. **Cmd+K global ticker search** — shadcn `command` component + dialog (Small, 1 session, independent)
+4. **Build `/screener` frontend page** — filters, results table, row nav, save actions (Medium, depends on #1+#2)
+5. **Lightweight Charts on `/analyze`** — Candlestick chart + ATR level overlays (Medium, independent)
 
-- [ ] Task 1.1: Confirm the “golden path” decision (transport + entrypoint)
-- [ ] Task 1.2: Identify and document what becomes “legacy”
-- [ ] Task 1.3: Produce a refactor sequencing plan (P0/P1/P2)
-
-## Phase 2: MCP/FastMCP Research (External)
+## Phase 1: Repo Audit (Local) — Complete
 
 ### Tasks
 
-- [ ] Task 2.1: Validate MCP transport guidance (spec/changelog) for this use case
-- [ ] Task 2.2: Validate FastMCP capabilities to leverage (background tasks, sampling)
+- [x] Task 1.1: Confirm the “golden path” decision (transport + entrypoint) — See `audit.md`
+- [x] Task 1.2: Identify and document what becomes “legacy” — See `audit.md` hotspots section
+- [x] Task 1.3: Produce a refactor sequencing plan (P0/P1/P2) — See `modernization.md` refactor backlog
 
-## Phase 3: Modernization Roadmap
+## Phase 2: MCP/FastMCP Research (External) — Complete
 
 ### Tasks
 
-- [ ] Task 3.1: Define “safe wins” to do first (no behavior changes)
-- [ ] Task 3.2: Define an implementation track plan (TDD tasks + verification)
-- [ ] Task 3.3: Create an explicit deprecation plan for alternate paths
+- [x] Task 2.1: Validate MCP transport guidance (spec/changelog) for this use case — See `mcp-fastmcp-research.md`
+- [x] Task 2.2: Validate FastMCP capabilities to leverage (background tasks, sampling) — See `mcp-fastmcp-research.md` (FastMCP 2.14 features)
+
+## Phase 3: Modernization Roadmap — Complete
+
+### Tasks
+
+- [x] Task 3.1: Define “safe wins” to do first (no behavior changes) — See `modernization.md` “Safe Wins” section
+- [x] Task 3.2: Define an implementation track plan (TDD tasks + verification) — See `modernization.md` refactor backlog P0/P1/P2
+- [x] Task 3.3: Create an explicit deprecation plan for alternate paths — See `modernization.md` P0 items
 
 ### Verification
 
-- [ ] Deliverables completed (audit + research + roadmap)
+- [x] Deliverables completed (audit + research + roadmap)
 - [ ] LLM Judge: N/A (no harness configured)
 
-## Phase 4: Screener & Frontend Expansion
+## Phase 4: Screener & Frontend Expansion — In Progress
 
-### Tasks
+### Already Built (outside this track, Feb 2026)
+
+These features were shipped via direct development and partially fulfill Phase 4 goals:
+
+- `/trade-plan` page — Daily trade plan with MTF EMAs, VIX, Options IV, strategy guidance, premarket levels (15+ commits)
+- `/scan` page — Setup detection engine with batch scanning, 65 Vitest tests, session persistence, grade filtering
+- `/watchlists` page — Full CRUD + batch indicator calculate (fulfills Task 4.5 for watchlists)
+- `/analyze/[ticker]` page — Full trade plan display, Green Flag checklist, probable setups, save-to-idea
+- MTF indicator engine — Phase Oscillator, Pivot Ribbon, Key Pivots all support multi-timeframe analysis
+- 20 shadcn components installed including `sonner` (toasts) and `table`
+
+### Remaining Tasks
 
 - [ ] Task 4.1: Wire up `get_movers`, `get_quotes`, `get_instruments` in schwab client wrapper + add `/api/schwab/movers`, `/api/schwab/quotes`, `/api/schwab/fundamentals` endpoints
 - [ ] Task 4.2: Build `POST /api/screener/scan` orchestrator endpoint (`api/endpoints/screener.py`) — resolve universe, run Saty indicators in batch, grade with Green Flag, return ranked results
-- [ ] Task 4.3: Add shadcn components to frontend (`data-table`, `command` for ticker search, `sonner` for toasts)
+- [~] Task 4.3: Add shadcn components to frontend — `sonner` done, `table` done, `data-table` (tanstack-table) and `command` (Cmd+K) remaining
 - [ ] Task 4.4: Build `/screener` frontend page — filters panel, results data-table, row click → `/analyze/[ticker]`, save-to-watchlist and create-idea actions
-- [ ] Task 4.5: Build missing pages — `/alerts` (manage alerts linked to ideas), `/watchlists` (CRUD + batch calculate)
+- [~] Task 4.5: Build missing pages — `/watchlists` done (CRUD + batch calculate). `/alerts` remaining (manage alerts linked to ideas)
 
 ### Verification
 
