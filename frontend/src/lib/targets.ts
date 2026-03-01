@@ -35,9 +35,9 @@ function collectLevels(
   }
 
   // --- ATR Fibonacci levels (daily — primary) ---
+  // Note: call_trigger and put_trigger are excluded here because they are
+  // already displayed in the ATR Levels section of the trade plan.
   const atr = daily.atr_levels
-  add(atr.call_trigger, "Call Trigger", "ATR 1D")
-  add(atr.put_trigger, "Put Trigger", "ATR 1D")
   const lvls = atr.levels || {}
   add(lvls.golden_gate_bull?.price, "Golden Gate Bull", "ATR 1D")
   add(lvls.golden_gate_bear?.price, "Golden Gate Bear", "ATR 1D")
@@ -49,10 +49,6 @@ function collectLevels(
   add(lvls.fib_786_bear?.price, "Fib 786 Bear", "ATR 1D")
   add(lvls.full_range_bull?.price, "Full Range Bull", "ATR 1D")
   add(lvls.full_range_bear?.price, "Full Range Bear", "ATR 1D")
-
-  // --- Hourly ATR triggers ---
-  add(hourly.atr_levels.call_trigger, "Call Trigger", "ATR 1H")
-  add(hourly.atr_levels.put_trigger, "Put Trigger", "ATR 1H")
 
   // --- EMAs across all timeframes ---
   const emaNames = ["ema8", "ema13", "ema21", "ema48", "ema200"] as const

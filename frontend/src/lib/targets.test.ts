@@ -175,15 +175,22 @@ describe("collectLevels", () => {
 
     const levels = collectLevels(daily, hourly, fifteenMin, weekly)
 
-    // Should have: 12 ATR fibs (including mid_50 + fib_786) + 2 hourly triggers + 20 EMAs + 2 structure + 8 pivots = 44
-    expect(levels.length).toBeGreaterThanOrEqual(30)
+    // Should have: 12 ATR fibs (including mid_50 + fib_786) + 20 EMAs + 2 structure + 8 pivots = 42
+    // Note: call/put triggers are excluded (shown in ATR Levels section)
+    expect(levels.length).toBeGreaterThanOrEqual(25)
 
-    // Check ATR levels are present
+    // Call/put triggers should NOT be in targets (they're in ATR Levels section)
     const callTrigger = levels.find(
-      (l) => l.label === "Call Trigger" && l.source === "ATR 1D"
+      (l) => l.label === "Call Trigger"
     )
-    expect(callTrigger).toBeDefined()
-    expect(callTrigger!.price).toBe(610)
+    expect(callTrigger).toBeUndefined()
+
+    // Check ATR fib levels ARE present
+    const goldenGate = levels.find(
+      (l) => l.label === "Golden Gate Bull" && l.source === "ATR 1D"
+    )
+    expect(goldenGate).toBeDefined()
+    expect(goldenGate!.price).toBe(614)
 
     // Check EMAs are present from all timeframes
     const weeklyEma200 = levels.find(
@@ -384,12 +391,11 @@ describe("computeTargets", () => {
 
   it("includes confluence info on clustered levels", () => {
     const daily = makeTradePlanResponse()
-    // Set hourly call trigger very close to daily call trigger for confluence
+    // Set hourly EMAs very close to daily pivot for confluence
     const hourly = makeCalculateResponse({
-      atr_levels: {
-        ...makeCalculateResponse().atr_levels,
-        call_trigger: 610.2, // within 0.15% of daily 610
-        put_trigger: 590.1,  // within 0.15% of daily 590
+      pivot_ribbon: {
+        ...makeCalculateResponse().pivot_ribbon,
+        ema8: 612.1, // within 0.15% of daily PWH (612) for confluence
       },
     })
     const fifteenMin = makeCalculateResponse()
