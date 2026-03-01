@@ -153,7 +153,10 @@ export function MomentumControls({
       {scanning && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          Scanning {Array.from(selected).join(" + ")} universe...
+          Scanning {[
+            ...UNIVERSE_OPTIONS.filter((u) => selected.has(u.key)).map((u) => u.label),
+            ...watchlists.filter((w) => selectedWatchlists.has(w.id)).map((w) => w.name),
+          ].join(" + ")}...
         </div>
       )}
       {error && !scanning && (

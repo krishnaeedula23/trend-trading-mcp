@@ -49,7 +49,10 @@ function loadResponse(): MomentumScanResponse | null {
 
 function saveConfig(config: MomentumScanConfig) {
   try {
-    sessionStorage.setItem(CONFIG_KEY, JSON.stringify(config))
+    // Persist only universes + min_price — custom_tickers are derived from
+    // watchlist toggle state and can't be round-tripped back to watchlist IDs
+    const { custom_tickers: _, ...persistable } = config
+    sessionStorage.setItem(CONFIG_KEY, JSON.stringify(persistable))
   } catch {
     // ignore
   }
