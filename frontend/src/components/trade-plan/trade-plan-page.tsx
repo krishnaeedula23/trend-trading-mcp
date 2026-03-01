@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useDailyPlan } from "@/hooks/use-daily-plan"
 import { useOptionsData } from "@/hooks/use-options-data"
 import { VixStatusBar } from "./vix-status-bar"
+import { StrategySection } from "./strategy-section"
 import { DirectionalPlan } from "./directional-plan"
 import { OptionsDataSection } from "./options-data-section"
 import { InstrumentPanel } from "./instrument-panel"
@@ -123,6 +124,13 @@ export function TradePlanPage() {
 
       {/* VIX Status Bar */}
       <VixStatusBar vix={data.vix} />
+
+      {/* Strategy Section — game plan with EM/ATR confluence + VIX premarket */}
+      <StrategySection
+        instruments={data.instruments}
+        vix={data.vix}
+        optionsData={optionsData.data}
+      />
 
       {/* Directional Plan */}
       <DirectionalPlan instruments={data.instruments} />

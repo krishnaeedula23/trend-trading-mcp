@@ -3,7 +3,7 @@
 // Fetches multi-TF data from Railway, computes targets, writes to Supabase.
 // ---------------------------------------------------------------------------
 
-import { calculateIndicators, getTradePlan } from "./railway"
+import { calculateIndicators, getTradePlan, getPremarket } from "./railway"
 import { computeTargets } from "./targets"
 import { createServerClient } from "./supabase/server"
 import { INSTRUMENTS, VIX_TICKER } from "./daily-plan-types"
@@ -21,7 +21,10 @@ function getSession(): string {
   return hourUTC < 18 ? "premarket" : "after_close"
 }
 
-function buildVixSnapshot(vixData: CalculateResponse): VixSnapshot {
+function buildVixSnapshot(
+  vixData: CalculateResponse,
+  premkt?: { price: number | null; high: number | null; low: number | null } | null,
+): VixSnapshot {
   const price = vixData.atr_levels.current_price
   let keyLevel: string
   if (price < 14) keyLevel = "Below 14 — very low vol, complacent"
@@ -36,6 +39,9 @@ function buildVixSnapshot(vixData: CalculateResponse): VixSnapshot {
     trend: vixData.atr_levels.trend,
     phase: vixData.phase_oscillator.phase,
     keyLevel,
+    premktPrice: premkt?.price ?? null,
+    premktHigh: premkt?.high ?? null,
+    premktLow: premkt?.low ?? null,
   }
 }
 
@@ -72,7 +78,13 @@ export async function generateDailyPlan(
   }
   try {
     const vixData = await calculateIndicators(VIX_TICKER, "1d", ucc)
-    vix = buildVixSnapshot(vixData)
+    // Also fetch VIX premarket data (graceful — null if unavailable)
+    let vixPremkt: { price: number | null; high: number | null; low: number | null } | null = null
+    try {
+      const pm = await getPremarket(VIX_TICKER)
+      if (pm.price != null) vixPremkt = pm
+    } catch { /* VIX premarket is optional */ }
+    vix = buildVixSnapshot(vixData, vixPremkt)
   } catch (err) {
     errors.push({ ticker: VIX_TICKER, error: String(err) })
   }

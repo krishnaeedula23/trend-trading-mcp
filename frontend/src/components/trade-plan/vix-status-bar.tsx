@@ -38,6 +38,22 @@ export function VixStatusBar({ vix }: { vix: VixSnapshot }) {
           {fmt(vix.price)}
         </span>
       </div>
+      {/* VIX premarket data — shows delta from close */}
+      {vix.premktPrice != null && vix.price > 0 && (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">PM:</span>
+          <span className={cn("font-mono text-sm font-medium", priceColor)}>
+            {fmt(vix.premktPrice)}
+          </span>
+          <span className={cn("text-xs font-mono",
+            // For VIX: rising = red (vol expanding), falling = green (vol contracting)
+            vix.premktPrice > vix.price ? "text-red-400" : "text-emerald-400"
+          )}>
+            {vix.premktPrice > vix.price ? "▲" : "▼"}
+            {fmt(Math.abs(vix.premktPrice - vix.price))}
+          </span>
+        </div>
+      )}
       <Badge className={cn("text-[10px]", trendColor)}>
         {vix.trend.toUpperCase()}
       </Badge>

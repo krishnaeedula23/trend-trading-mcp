@@ -50,6 +50,10 @@ export interface VixSnapshot {
   trend: string // "bullish" | "bearish" | "chopzilla"
   phase: string
   keyLevel: string // "Below 17 (bullish)" etc.
+  // Premarket (optional — null outside premarket hours or if unavailable)
+  premktPrice?: number | null
+  premktHigh?: number | null
+  premktLow?: number | null
 }
 
 // --- Daily Plan Data (full page payload) ---

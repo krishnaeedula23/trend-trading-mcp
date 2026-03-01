@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import type { InstrumentPlan } from "@/lib/daily-plan-types"
+import type { StructuralBias, GapScenario } from "@/lib/types"
 
 function fmt(n: number | null | undefined, decimals = 2): string {
   if (n == null) return "--"
@@ -25,6 +26,46 @@ function LevelRow({
       </span>
     </div>
   )
+}
+
+function biasLabel(bias: StructuralBias): string {
+  switch (bias) {
+    case "strongly_bullish": return "Strong Bull"
+    case "bullish": return "Bullish"
+    case "neutral": return "Neutral"
+    case "bearish": return "Bearish"
+    case "strongly_bearish": return "Strong Bear"
+  }
+}
+
+function biasColor(bias: StructuralBias): string {
+  switch (bias) {
+    case "strongly_bullish": return "bg-emerald-600/20 text-emerald-400 border-emerald-600/30"
+    case "bullish": return "bg-emerald-600/15 text-emerald-300 border-emerald-600/20"
+    case "neutral": return "bg-zinc-600/20 text-zinc-400 border-zinc-600/30"
+    case "bearish": return "bg-red-600/15 text-red-300 border-red-600/20"
+    case "strongly_bearish": return "bg-red-600/20 text-red-400 border-red-600/30"
+  }
+}
+
+function gapLabel(gap: GapScenario): string {
+  switch (gap) {
+    case "gap_above_pdh": return "Gap Above PDH"
+    case "gap_below_pdl": return "Gap Below PDL"
+    case "gap_up_inside_range": return "Gap Up (Inside)"
+    case "gap_down_inside_range": return "Gap Down (Inside)"
+    case "no_gap": return "No Gap"
+  }
+}
+
+function gapColor(gap: GapScenario): string {
+  switch (gap) {
+    case "gap_above_pdh": return "bg-emerald-600/20 text-emerald-400 border-emerald-600/30"
+    case "gap_below_pdl": return "bg-red-600/20 text-red-400 border-red-600/30"
+    case "gap_up_inside_range": return "bg-emerald-600/10 text-emerald-300 border-emerald-600/20"
+    case "gap_down_inside_range": return "bg-red-600/10 text-red-300 border-red-600/20"
+    case "no_gap": return "bg-zinc-600/20 text-zinc-400 border-zinc-600/30"
+  }
 }
 
 export function KeyLevelsSection({ plan }: { plan: InstrumentPlan }) {
@@ -78,6 +119,25 @@ export function KeyLevelsSection({ plan }: { plan: InstrumentPlan }) {
         <LevelRow label="PDH" value={ps.pdh} />
         <LevelRow label="PDL" value={ps.pdl} />
         <LevelRow label="PDC" value={ps.pdc} color="text-amber-400" />
+        {/* Premarket levels — cyan, auto-hide when null (SPX/after-close) */}
+        <LevelRow label="PMH" value={ps.pmh} color="text-cyan-400" />
+        <LevelRow label="PML" value={ps.pml} color="text-cyan-400" />
+        {/* Premarket current price */}
+        <LevelRow label="PM Price" value={ps.premarket_price} color="text-cyan-300" />
+        {/* Structural Bias */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Bias</span>
+          <Badge variant="outline" className={cn("text-[10px]", biasColor(ps.structural_bias))}>
+            {biasLabel(ps.structural_bias)}
+          </Badge>
+        </div>
+        {/* Gap Scenario */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Gap</span>
+          <Badge variant="outline" className={cn("text-[10px]", gapColor(ps.gap_scenario))}>
+            {gapLabel(ps.gap_scenario)}
+          </Badge>
+        </div>
       </div>
 
       <div className="h-px bg-border/30" />

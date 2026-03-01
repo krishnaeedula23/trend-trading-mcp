@@ -128,3 +128,21 @@ export async function getIvMetrics(
   const res = await railwayFetch("/api/options/iv-metrics", { ticker });
   return res.json() as Promise<IvMetrics>;
 }
+
+/**
+ * POST /api/satyland/premarket — premarket high/low/last for a ticker.
+ * Returns null values when no premarket data is available.
+ */
+export interface PremarketData {
+  ticker: string;
+  price: number | null;
+  high: number | null;
+  low: number | null;
+}
+
+export async function getPremarket(
+  ticker: string
+): Promise<PremarketData> {
+  const res = await railwayFetch("/api/satyland/premarket", { ticker });
+  return res.json() as Promise<PremarketData>;
+}

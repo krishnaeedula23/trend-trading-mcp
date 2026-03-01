@@ -11,7 +11,9 @@ Pivot Ribbon and Phase Oscillator run on the requested chart timeframe.
 """
 
 import asyncio
+from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
@@ -93,6 +95,45 @@ class TradePlanRequest(BaseModel):
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False)
     use_current_close: bool | None = Field(None)
+
+
+class PremarketRequest(BaseModel):
+    ticker: str = Field(..., description="Ticker symbol, e.g. SPY or ^VIX")
+
+
+# Indices that truly have NO premarket data (price indices, not computed)
+_NO_PREMARKET = {"^GSPC"}  # SPX = price index, no extended hours
+
+
+def _fetch_premarket(ticker: str) -> pd.DataFrame | None:
+    """
+    Fetch today's premarket bars (4:00-9:30 AM ET) via yfinance.
+
+    Skips only ^GSPC (price index — no extended hours).
+    Allows ^VIX (CBOE publishes VIX during extended hours).
+    Returns None gracefully on any failure — premarket is optional.
+    """
+    if ticker in _NO_PREMARKET:
+        return None
+    try:
+        df = yf.download(ticker, period="5d", interval="1m",
+                         prepost=True, auto_adjust=True, progress=False)
+        if df.empty:
+            return None
+        df = _normalise_columns(df)
+        # Filter to today's premarket window (4:00-9:30 AM ET)
+        ET = ZoneInfo("America/New_York")
+        today = datetime.now(ET).strftime("%Y-%m-%d")
+        start = pd.Timestamp(f"{today} 04:00", tz=ET)
+        end = pd.Timestamp(f"{today} 09:30", tz=ET)
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC").tz_convert(ET)
+        else:
+            df.index = df.index.tz_convert(ET)
+        pm = df.loc[(df.index >= start) & (df.index < end)]
+        return pm if not pm.empty else None
+    except Exception:
+        return None
 
 
 def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -288,7 +329,14 @@ async def trade_plan(req: TradePlanRequest):
                             use_current_close=ucc)
         ribbon = pivot_ribbon(intraday_df)
         phase  = phase_oscillator(intraday_df)
-        struct = price_structure(daily_df, use_current_close=ucc)
+
+        # Fetch premarket data for SPY (skips ^GSPC automatically)
+        premarket_df = _fetch_premarket(req.ticker)
+        struct = price_structure(daily_df, premarket_df=premarket_df, use_current_close=ucc)
+
+        # Add premarket last price if available (for real-time positioning)
+        if premarket_df is not None and not premarket_df.empty:
+            struct["premarket_price"] = round(float(premarket_df["close"].iloc[-1]), 4)
         pivots = key_pivots(daily_long_df, use_current_close=ucc)
         # Scan last ~6 months for unfilled gaps
         gaps_df = daily_long_df.loc[daily_long_df.index >= daily_long_df.index[-1] - pd.DateOffset(months=6)]
@@ -407,4 +455,30 @@ async def batch_calculate(req: BatchCalculateRequest):
     return JSONResponse(
         content={"results": results},
         headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
+    )
+
+
+@router.post("/premarket")
+async def get_premarket(req: PremarketRequest):
+    """
+    Return premarket high/low/last for a ticker.
+
+    Works for SPY, ^VIX, and other tickers with extended hours data.
+    Returns null values gracefully when no premarket data is available
+    (e.g., after market close, weekends, or unsupported tickers).
+    """
+    pm = _fetch_premarket(req.ticker)
+    if pm is None or pm.empty:
+        return JSONResponse(
+            content={"ticker": req.ticker.upper(), "price": None, "high": None, "low": None},
+            headers={"Cache-Control": "s-maxage=30, stale-while-revalidate=60"},
+        )
+    return JSONResponse(
+        content={
+            "ticker": req.ticker.upper(),
+            "price": round(float(pm["close"].iloc[-1]), 4),
+            "high": round(float(pm["high"].max()), 4),
+            "low": round(float(pm["low"].min()), 4),
+        },
+        headers={"Cache-Control": "s-maxage=30, stale-while-revalidate=60"},
     )

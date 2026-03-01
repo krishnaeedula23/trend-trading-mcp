@@ -159,6 +159,7 @@ export interface PriceStructure {
   current_price: number;
   pmh: number | null;
   pml: number | null;
+  premarket_price?: number | null;
   structural_bias: StructuralBias;
   gap_scenario: GapScenario;
   price_above_pdh: boolean;
