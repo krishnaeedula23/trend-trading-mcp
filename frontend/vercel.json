@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/daily-plan",
-      "schedule": "30 21 * * 1-5"
+      "path": "/api/cron/daily-screeners",
+      "schedule": "0 14 * * 1-5"
     }
   ]
 }
