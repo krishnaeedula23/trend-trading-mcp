@@ -414,3 +414,49 @@ export interface GoldenGateScanResponse {
   signal_type: GoldenGateSignalType
   trading_mode: TradingMode
 }
+
+// ---------------------------------------------------------------------------
+// VOMY / iVOMY Scanner
+// ---------------------------------------------------------------------------
+
+export type VomySignalType = "vomy" | "ivomy" | "both"
+
+export type VomyTimeframe = "1h" | "4h" | "1d" | "1w"
+
+export interface VomyHit {
+  ticker: string
+  last_close: number
+  signal: "vomy" | "ivomy"
+  ema13: number
+  ema21: number
+  ema34: number
+  ema48: number
+  distance_from_ema48_pct: number
+  atr: number
+  pdc: number
+  atr_status: AtrStatus
+  atr_covered_pct: number
+  trend: Trend
+  trading_mode: TradingMode
+  timeframe: VomyTimeframe
+}
+
+export interface VomyScanRequest {
+  universes: string[]
+  timeframe: VomyTimeframe
+  signal_type: VomySignalType
+  min_price: number
+  custom_tickers?: string[]
+  include_premarket: boolean
+}
+
+export interface VomyScanResponse {
+  hits: VomyHit[]
+  total_scanned: number
+  total_hits: number
+  total_errors: number
+  skipped_low_price: number
+  scan_duration_seconds: number
+  signal_type: VomySignalType
+  timeframe: VomyTimeframe
+}
