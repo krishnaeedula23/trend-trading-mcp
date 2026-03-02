@@ -12,6 +12,7 @@ import { useMomentumScan } from "@/hooks/use-momentum-scan"
 import { useGoldenGateScan } from "@/hooks/use-golden-gate-scan"
 import { useVomyScan } from "@/hooks/use-vomy-scan"
 import { useWatchlists } from "@/hooks/use-watchlists"
+import { CachedScanBanner } from "@/components/screener/cached-scan-banner"
 
 function ComingSoon({ name }: { name: string }) {
   return (
@@ -47,6 +48,7 @@ export default function ScreenerPage() {
         </TabsList>
 
         <TabsContent value="momentum" className="space-y-4">
+          <CachedScanBanner cachedAt={momentum.cachedAt} loading={momentum.loadingCache} onRefresh={momentum.refreshCache} />
           <MomentumControls
             scanning={momentum.scanning}
             response={momentum.response}
@@ -61,6 +63,7 @@ export default function ScreenerPage() {
         </TabsContent>
 
         <TabsContent value="golden-gate" className="space-y-4">
+          <CachedScanBanner cachedAt={goldenGate.cachedAt} loading={goldenGate.loadingCache} onRefresh={goldenGate.refreshCache} />
           <GoldenGateControls
             scanning={goldenGate.scanning}
             response={goldenGate.response}
@@ -78,6 +81,7 @@ export default function ScreenerPage() {
         </TabsContent>
 
         <TabsContent value="vomy" className="space-y-4">
+          <CachedScanBanner cachedAt={vomy.cachedAt} loading={vomy.loadingCache} onRefresh={vomy.refreshCache} />
           <VomyControls
             scanning={vomy.scanning}
             response={vomy.response}
