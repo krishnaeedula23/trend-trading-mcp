@@ -434,6 +434,8 @@ export interface VomyHit {
   distance_from_ema48_pct: number
   atr: number
   pdc: number
+  nearest_level_name: string
+  nearest_level_pct: number
   atr_status: AtrStatus
   atr_covered_pct: number
   trend: Trend

@@ -357,6 +357,8 @@ class TestVomyScan:
             "trend",
             "trading_mode",
             "timeframe",
+            "nearest_level_name",
+            "nearest_level_pct",
         ]
         for field in expected_fields:
             assert field in hit, f"Missing field: {field}"
@@ -526,7 +528,26 @@ class TestVomyScan:
         assert "conviction_bars_ago" in hit
         assert "conviction_confirmed" in hit
 
-    # 12. Conviction confirmed alignment
+    # 12. Nearest level fields valid
+    def test_nearest_level_fields_valid(self, client):
+        """nearest_level_name is a non-empty string, nearest_level_pct is a float."""
+        daily = _make_vomy_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/vomy-scan",
+                json={"universes": ["sp500"], "signal_type": "vomy", "timeframe": "1d"},
+            )
+
+        data = resp.json()
+        assert data["total_hits"] > 0
+        hit = data["hits"][0]
+        assert isinstance(hit["nearest_level_name"], str)
+        assert len(hit["nearest_level_name"]) > 0
+        assert isinstance(hit["nearest_level_pct"], (int, float))
+
+    # 13. Conviction confirmed alignment
     def test_conviction_confirmed_alignment(self, client):
         """VOMY + bearish_crossover → confirmed=True; else confirmed=False."""
         daily = _make_vomy_daily(base_price=100.0)

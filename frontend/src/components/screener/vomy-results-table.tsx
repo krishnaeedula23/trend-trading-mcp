@@ -17,7 +17,7 @@ import type { VomyHit, AtrStatus, Trend } from "@/lib/types"
 import { createIdea } from "@/hooks/use-ideas"
 import { categorizeError } from "@/lib/errors"
 
-type SortKey = "ticker" | "last_close" | "distance" | "atr_covered" | "ema13" | "trend" | "conviction"
+type SortKey = "ticker" | "last_close" | "distance" | "atr_covered" | "ema13" | "trend" | "conviction" | "nearest_trigger"
 
 // --- Badge helpers ---
 
@@ -176,6 +176,8 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
           if (aConf !== bConf) return dir * (aConf - bConf)
           return dir * ((a.conviction_bars_ago ?? 99) - (b.conviction_bars_ago ?? 99))
         }
+        case "nearest_trigger":
+          return dir * (Math.abs(a.nearest_level_pct) - Math.abs(b.nearest_level_pct))
         default:
           return 0
       }
@@ -225,6 +227,7 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
             <SortHeader label="Dist %" k="distance" />
             <SortHeader label="ATR %" k="atr_covered" />
             <TableHead className="text-xs">ATR</TableHead>
+            <SortHeader label="Nearest Level" k="nearest_trigger" />
             <SortHeader label="Conviction" k="conviction" />
             <SortHeader label="Trend" k="trend" />
             <TableHead className="w-10" />
@@ -259,6 +262,9 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
                   <Badge variant="outline" className={`text-[10px] ${atr.color}`}>
                     {atr.text}
                   </Badge>
+                </TableCell>
+                <TableCell className={`text-xs font-medium ${hit.nearest_level_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {hit.nearest_level_name} {hit.nearest_level_pct >= 0 ? "+" : ""}{hit.nearest_level_pct.toFixed(1)}%
                 </TableCell>
                 <TableCell>
                   {conv ? (

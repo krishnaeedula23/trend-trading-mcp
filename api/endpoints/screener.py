@@ -751,9 +751,25 @@ async def golden_gate_scan(request: GoldenGateScanRequest) -> GoldenGateScanResp
 # Timeframe → trading mode for ATR enrichment (distinct from _MODE_DEFAULT_TF)
 _VOMY_TF_TO_MODE: dict[str, str] = {
     "1h": "multiday",
-    "4h": "multiday",
+    "4h": "swing",
     "1d": "swing",
     "1w": "position",
+}
+
+# Friendly labels for ATR Fibonacci levels (used by nearest-level column)
+_ATR_LEVEL_LABELS: dict[str, str] = {
+    "trigger_bull": "Call Trigger",
+    "trigger_bear": "Put Trigger",
+    "golden_gate_bull": "Golden Gate \u2191",
+    "golden_gate_bear": "Golden Gate \u2193",
+    "mid_50_bull": "Mid 50 \u2191",
+    "mid_50_bear": "Mid 50 \u2193",
+    "mid_range_bull": "Mid Range \u2191",
+    "mid_range_bear": "Mid Range \u2193",
+    "fib_786_bull": "Fib 786 \u2191",
+    "fib_786_bear": "Fib 786 \u2193",
+    "full_range_bull": "Full Range \u2191",
+    "full_range_bear": "Full Range \u2193",
 }
 
 
@@ -797,6 +813,8 @@ class VomyHit(BaseModel):
     distance_from_ema48_pct: float
     atr: float
     pdc: float
+    nearest_level_name: str
+    nearest_level_pct: float
     atr_status: str
     atr_covered_pct: float
     trend: str
@@ -952,6 +970,21 @@ async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
                     ((last_close - ema48) / ema48) * 100 if ema48 > 0 else 0.0
                 )
 
+                # Find closest ATR Fibonacci level to current price
+                atr_lvls = atr_result["levels"]
+                best_key, best_dist = "", float("inf")
+                for key, lvl in atr_lvls.items():
+                    dist = abs(lvl["price"] - last_close)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_key = key
+                nearest_pct = (
+                    ((atr_lvls[best_key]["price"] - last_close) / last_close) * 100
+                    if best_key
+                    else 0.0
+                )
+                nearest_name = _ATR_LEVEL_LABELS.get(best_key, best_key)
+
                 return VomyHit(
                     ticker=ticker.upper(),
                     last_close=round(last_close, 2),
@@ -963,6 +996,8 @@ async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
                     distance_from_ema48_pct=round(distance_pct, 2),
                     atr=atr_result["atr"],
                     pdc=atr_result["pdc"],
+                    nearest_level_name=nearest_name,
+                    nearest_level_pct=round(nearest_pct, 2),
                     atr_status=atr_result["atr_status"],
                     atr_covered_pct=atr_result["atr_covered_pct"],
                     trend=atr_result["trend"],
