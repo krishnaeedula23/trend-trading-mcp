@@ -8,6 +8,7 @@ import type {
   VomySignalType,
   VomyTimeframe,
 } from "@/lib/types"
+import { useCachedScan } from "./use-cached-scan"
 
 export interface VomyScanConfig {
   universes: string[]
@@ -26,6 +27,9 @@ interface UseVomyScanReturn {
   error: string | null
   runScan: (config: VomyScanConfig) => void
   cancelScan: () => void
+  cachedAt: string | null
+  loadingCache: boolean
+  refreshCache: () => void
 }
 
 const STORAGE_KEY = "vomy_scan_results"
@@ -89,6 +93,9 @@ export function useVomyScan(): UseVomyScanReturn {
   const abortRef = useRef<AbortController | null>(null)
   const hydrated = useRef(false)
 
+  const scanKey = `vomy:${config.timeframe}:${config.signal_type}`
+  const { cachedData, cachedAt, loadingCache, refreshCache } = useCachedScan<VomyScanResponse>(scanKey)
+
   // Hydrate from sessionStorage on mount
   useEffect(() => {
     if (hydrated.current) return
@@ -100,6 +107,13 @@ export function useVomyScan(): UseVomyScanReturn {
     }
     setConfig(loadConfig())
   }, [])
+
+  // Hydrate from Supabase cache if no sessionStorage data
+  useEffect(() => {
+    if (response || scanning || !cachedData) return
+    setHits(cachedData.hits)
+    setResponse(cachedData)
+  }, [cachedData, response, scanning])
 
   const runScan = useCallback(
     async (newConfig: VomyScanConfig) => {
@@ -162,5 +176,5 @@ export function useVomyScan(): UseVomyScanReturn {
     setScanning(false)
   }, [])
 
-  return { hits, scanning, response, config, error, runScan, cancelScan }
+  return { hits, scanning, response, config, error, runScan, cancelScan, cachedAt, loadingCache, refreshCache }
 }

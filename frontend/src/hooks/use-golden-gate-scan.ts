@@ -8,6 +8,7 @@ import type {
   GoldenGateSignalType,
   TradingMode,
 } from "@/lib/types"
+import { useCachedScan } from "./use-cached-scan"
 
 export interface GoldenGateScanConfig {
   universes: string[]
@@ -26,6 +27,9 @@ interface UseGoldenGateScanReturn {
   error: string | null
   runScan: (config: GoldenGateScanConfig) => void
   cancelScan: () => void
+  cachedAt: string | null
+  loadingCache: boolean
+  refreshCache: () => void
 }
 
 const STORAGE_KEY = "golden_gate_scan_results"
@@ -89,6 +93,9 @@ export function useGoldenGateScan(): UseGoldenGateScanReturn {
   const abortRef = useRef<AbortController | null>(null)
   const hydrated = useRef(false)
 
+  const scanKey = `golden_gate:${config.trading_mode}:${config.signal_type}`
+  const { cachedData, cachedAt, loadingCache, refreshCache } = useCachedScan<GoldenGateScanResponse>(scanKey)
+
   // Hydrate from sessionStorage on mount
   useEffect(() => {
     if (hydrated.current) return
@@ -100,6 +107,13 @@ export function useGoldenGateScan(): UseGoldenGateScanReturn {
     }
     setConfig(loadConfig())
   }, [])
+
+  // Hydrate from Supabase cache if no sessionStorage data
+  useEffect(() => {
+    if (response || scanning || !cachedData) return
+    setHits(cachedData.hits)
+    setResponse(cachedData)
+  }, [cachedData, response, scanning])
 
   const runScan = useCallback(
     async (newConfig: GoldenGateScanConfig) => {
@@ -162,5 +176,5 @@ export function useGoldenGateScan(): UseGoldenGateScanReturn {
     setScanning(false)
   }, [])
 
-  return { hits, scanning, response, config, error, runScan, cancelScan }
+  return { hits, scanning, response, config, error, runScan, cancelScan, cachedAt, loadingCache, refreshCache }
 }

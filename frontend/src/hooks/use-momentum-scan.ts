@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react"
 import type { MomentumScanRequest, MomentumScanResponse, MomentumHit } from "@/lib/types"
+import { useCachedScan } from "./use-cached-scan"
 
 export interface MomentumScanConfig {
   universes: string[]
@@ -17,6 +18,9 @@ interface UseMomentumScanReturn {
   error: string | null
   runScan: (config: MomentumScanConfig) => void
   cancelScan: () => void
+  cachedAt: string | null
+  loadingCache: boolean
+  refreshCache: () => void
 }
 
 const STORAGE_KEY = "momentum_scan_results"
@@ -79,6 +83,9 @@ export function useMomentumScan(): UseMomentumScanReturn {
   const abortRef = useRef<AbortController | null>(null)
   const hydrated = useRef(false)
 
+  const scanKey = "momentum:default"
+  const { cachedData, cachedAt, loadingCache, refreshCache } = useCachedScan<MomentumScanResponse>(scanKey)
+
   // Hydrate from sessionStorage on mount
   useEffect(() => {
     if (hydrated.current) return
@@ -90,6 +97,13 @@ export function useMomentumScan(): UseMomentumScanReturn {
     }
     setConfig(loadConfig())
   }, [])
+
+  // Hydrate from Supabase cache if no sessionStorage data
+  useEffect(() => {
+    if (response || scanning || !cachedData) return
+    setHits(cachedData.hits)
+    setResponse(cachedData)
+  }, [cachedData, response, scanning])
 
   const runScan = useCallback(
     async (newConfig: MomentumScanConfig) => {
@@ -149,5 +163,5 @@ export function useMomentumScan(): UseMomentumScanReturn {
     setScanning(false)
   }, [])
 
-  return { hits, scanning, response, config, error, runScan, cancelScan }
+  return { hits, scanning, response, config, error, runScan, cancelScan, cachedAt, loadingCache, refreshCache }
 }
