@@ -483,3 +483,156 @@ class TestVomyScan:
         assert resp.status_code == 200
         assert data["total_errors"] == 2  # AAPL and MSFT both fail
         assert data["total_hits"] == 0
+
+    # 10. Conviction fields present on VOMY hit
+    def test_vomy_hit_has_conviction_fields(self, client):
+        """Every VOMY hit includes conviction_type, conviction_bars_ago, conviction_confirmed."""
+        daily = _make_vomy_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/vomy-scan",
+                json={"universes": ["sp500"], "signal_type": "vomy", "timeframe": "1d"},
+            )
+
+        data = resp.json()
+        assert data["total_hits"] > 0
+        hit = data["hits"][0]
+        assert "conviction_type" in hit
+        assert "conviction_bars_ago" in hit
+        assert "conviction_confirmed" in hit
+        assert hit["conviction_type"] in ("bullish_crossover", "bearish_crossover", None)
+        if hit["conviction_bars_ago"] is not None:
+            assert 1 <= hit["conviction_bars_ago"] <= 4
+        assert isinstance(hit["conviction_confirmed"], bool)
+
+    # 11. Conviction fields present on iVOMY hit
+    def test_ivomy_hit_has_conviction_fields(self, client):
+        """Every iVOMY hit includes conviction fields."""
+        daily = _make_ivomy_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/vomy-scan",
+                json={"universes": ["sp500"], "signal_type": "ivomy", "timeframe": "1d"},
+            )
+
+        data = resp.json()
+        assert data["total_hits"] > 0
+        hit = data["hits"][0]
+        assert "conviction_type" in hit
+        assert "conviction_bars_ago" in hit
+        assert "conviction_confirmed" in hit
+
+    # 12. Conviction confirmed alignment
+    def test_conviction_confirmed_alignment(self, client):
+        """VOMY + bearish_crossover → confirmed=True; else confirmed=False."""
+        daily = _make_vomy_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/vomy-scan",
+                json={"universes": ["sp500"], "signal_type": "vomy", "timeframe": "1d"},
+            )
+
+        data = resp.json()
+        assert data["total_hits"] > 0
+        hit = data["hits"][0]
+        if hit["conviction_type"] == "bearish_crossover":
+            assert hit["conviction_confirmed"] is True
+        else:
+            assert hit["conviction_confirmed"] is False
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for conviction crossover detection logic
+# ---------------------------------------------------------------------------
+
+
+class TestConvictionDetection:
+    """Unit tests for the 13/48 conviction crossover detection logic."""
+
+    @staticmethod
+    def _detect(ema13_vals: list[float], ema48_vals: list[float]):
+        """Run the conviction detection algorithm on raw EMA value lists."""
+        ema13_series = pd.Series(ema13_vals)
+        ema48_series = pd.Series(ema48_vals)
+
+        conviction_type = None
+        conviction_bars_ago = None
+        n = len(ema13_series)
+        lookback = min(4, n - 2)
+        for bars_ago in range(1, lookback + 1):
+            idx = n - 1 - bars_ago
+            prev_13_above = float(ema13_series.iloc[idx - 1]) >= float(
+                ema48_series.iloc[idx - 1]
+            )
+            curr_13_above = float(ema13_series.iloc[idx]) >= float(
+                ema48_series.iloc[idx]
+            )
+            if not prev_13_above and curr_13_above:
+                conviction_type = "bullish_crossover"
+                conviction_bars_ago = bars_ago
+                break
+            elif prev_13_above and not curr_13_above:
+                conviction_type = "bearish_crossover"
+                conviction_bars_ago = bars_ago
+                break
+
+        return conviction_type, conviction_bars_ago
+
+    def test_bullish_crossover_detected(self):
+        """EMA13 crosses above EMA48 → bullish_crossover."""
+        # ema13 below ema48, then crosses above at index 4 (bars_ago=1 from last bar 5)
+        ema13 = [90.0, 91.0, 93.0, 96.0, 99.0, 102.0]
+        ema48 = [95.0, 95.5, 96.0, 96.5, 97.0, 97.5]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct == "bullish_crossover"
+        assert ba == 1
+
+    def test_bearish_crossover_detected(self):
+        """EMA13 crosses below EMA48 → bearish_crossover."""
+        # ema13 above ema48, then crosses below at index 3 (bars_ago=3 from last bar 6)
+        ema13 = [102.0, 101.0, 99.0, 96.0, 95.0, 94.0, 93.0]
+        ema48 = [95.0, 95.5, 96.0, 97.0, 97.5, 98.0, 98.5]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct == "bearish_crossover"
+        assert ba == 3
+
+    def test_no_crossover_outside_window(self):
+        """Crossover at bar -6 (outside 4-bar window) → None."""
+        # Crossover at index 1, last bar at index 7 → 6 bars ago (beyond lookback)
+        ema13 = [90.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 104.0]
+        ema48 = [95.0, 95.5, 96.0, 96.5, 97.0, 97.5, 98.0, 98.5]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct is None
+        assert ba is None
+
+    def test_no_crossover_always_above(self):
+        """EMA13 always above EMA48 → no crossover → None."""
+        ema13 = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0]
+        ema48 = [90.0, 91.0, 92.0, 93.0, 94.0, 95.0]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct is None
+        assert ba is None
+
+    def test_crossover_at_bar_2(self):
+        """Crossover exactly 2 bars ago → bars_ago=2."""
+        # At index 4 (last=6): ema13 crosses below ema48
+        ema13 = [100.0, 100.0, 100.0, 100.0, 94.0, 93.0, 92.0]
+        ema48 = [95.0, 95.0, 95.0, 95.0, 95.0, 95.0, 95.0]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct == "bearish_crossover"
+        assert ba == 2
+
+    def test_most_recent_crossover_wins(self):
+        """Multiple crossovers → most recent (smallest bars_ago) is returned."""
+        # Crossover at index 2 (old) and index 5 (recent, bars_ago=1 from last=6)
+        ema13 = [90.0, 90.0, 98.0, 99.0, 100.0, 94.0, 93.0]
+        ema48 = [95.0, 95.0, 95.0, 95.0, 95.0, 95.0, 95.0]
+        ct, ba = self._detect(ema13, ema48)
+        assert ct == "bearish_crossover"
+        assert ba == 1
