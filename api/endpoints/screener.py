@@ -742,3 +742,229 @@ async def golden_gate_scan(request: GoldenGateScanRequest) -> GoldenGateScanResp
         signal_type=request.signal_type,
         trading_mode=request.trading_mode,
     )
+
+
+# ---------------------------------------------------------------------------
+# VOMY / iVOMY Scanner — EMA crossover flip detector
+# ---------------------------------------------------------------------------
+
+# Timeframe → trading mode for ATR enrichment (distinct from _MODE_DEFAULT_TF)
+_VOMY_TF_TO_MODE: dict[str, str] = {
+    "1h": "multiday",
+    "4h": "multiday",
+    "1d": "swing",
+    "1w": "position",
+}
+
+
+class VomyScanRequest(BaseModel):
+    """Request for the VOMY / iVOMY scanner."""
+
+    universes: list[str] = Field(
+        default=["sp500", "nasdaq100"],
+        description="Universe keys: sp500, nasdaq100, russell2000, or all",
+    )
+    timeframe: Literal["1h", "4h", "1d", "1w"] = Field(
+        default="1d",
+        description="Chart timeframe for EMA computation",
+    )
+    signal_type: Literal["vomy", "ivomy", "both"] = Field(
+        default="both",
+        description="Signal type: vomy (bearish), ivomy (bullish), or both",
+    )
+    min_price: float = Field(default=4.0, ge=0, description="Minimum close price")
+    custom_tickers: list[str] | None = Field(
+        default=None,
+        max_length=500,
+        description="Extra tickers to include",
+    )
+    include_premarket: bool = Field(
+        default=True,
+        description="Include premarket data (reserved for future use)",
+    )
+
+
+class VomyHit(BaseModel):
+    """A stock that triggered a VOMY or iVOMY signal."""
+
+    ticker: str
+    last_close: float
+    signal: str
+    ema13: float
+    ema21: float
+    ema34: float
+    ema48: float
+    distance_from_ema48_pct: float
+    atr: float
+    pdc: float
+    atr_status: str
+    atr_covered_pct: float
+    trend: str
+    trading_mode: str
+    timeframe: str
+
+
+class VomyScanResponse(BaseModel):
+    """Response for the VOMY / iVOMY scanner."""
+
+    hits: list[VomyHit]
+    total_scanned: int
+    total_hits: int
+    total_errors: int
+    skipped_low_price: int
+    scan_duration_seconds: float
+    signal_type: str
+    timeframe: str
+
+
+def _check_vomy_signal(
+    close: float,
+    ema13: float,
+    ema21: float,
+    ema34: float,
+    ema48: float,
+    signal_type: str,
+) -> str | None:
+    """Check VOMY / iVOMY conditions on a single bar.
+
+    VOMY  (bearish flip): ema13 >= close AND ema48 <= close AND ema13 >= ema21 >= ema34 >= ema48
+    iVOMY (bullish flip): ema13 <= close AND ema48 >= close AND ema13 <= ema21 <= ema34 <= ema48
+
+    Returns "vomy", "ivomy", or None.
+    """
+    if signal_type in ("vomy", "both"):
+        if ema13 >= close and ema48 <= close and ema13 >= ema21 >= ema34 >= ema48:
+            return "vomy"
+
+    if signal_type in ("ivomy", "both"):
+        if ema13 <= close and ema48 >= close and ema13 <= ema21 <= ema34 <= ema48:
+            return "ivomy"
+
+    return None
+
+
+@router.post("/vomy-scan")
+async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
+    """Scan universe for VOMY / iVOMY EMA crossover flip signals.
+
+    For each ticker, computes 4 EMAs (13/21/34/48) on the close series and
+    checks whether the last bar satisfies the sandwich condition.  Hits are
+    enriched with ATR levels for context.
+    """
+    t0 = time.monotonic()
+
+    # Build ticker list
+    tickers = await asyncio.to_thread(_load_universe, request.universes)
+    if request.custom_tickers:
+        existing = set(tickers)
+        for t in request.custom_tickers:
+            upper = t.strip().upper()
+            if upper and upper not in existing:
+                tickers.append(upper)
+                existing.add(upper)
+
+    logger.info(
+        "VOMY scan: %d tickers, timeframe=%s, signal=%s",
+        len(tickers),
+        request.timeframe,
+        request.signal_type,
+    )
+
+    ucc = resolve_use_current_close()
+    sem = asyncio.Semaphore(10)
+    hits: list[VomyHit] = []
+    errors = 0
+    skipped_low_price = 0
+
+    async def _process_ticker(ticker: str) -> VomyHit | None:
+        nonlocal errors, skipped_low_price
+        async with sem:
+            try:
+                # Fetch price data for EMA computation
+                intraday_df = await asyncio.to_thread(
+                    _fetch_intraday, ticker, request.timeframe
+                )
+
+                close_series = intraday_df["close"]
+                last_close = float(close_series.iloc[-1])
+
+                # Price filter
+                if last_close < request.min_price:
+                    skipped_low_price += 1
+                    return None
+
+                # Compute EMAs (span-based, NOT Wilder)
+                ema13 = float(close_series.ewm(span=13, adjust=False).mean().iloc[-1])
+                ema21 = float(close_series.ewm(span=21, adjust=False).mean().iloc[-1])
+                ema34 = float(close_series.ewm(span=34, adjust=False).mean().iloc[-1])
+                ema48 = float(close_series.ewm(span=48, adjust=False).mean().iloc[-1])
+
+                # Check signal
+                signal = _check_vomy_signal(
+                    last_close, ema13, ema21, ema34, ema48, request.signal_type
+                )
+                if signal is None:
+                    return None
+
+                # Enrich hits with ATR data
+                mode = _VOMY_TF_TO_MODE.get(request.timeframe, "swing")
+                atr_source_df = await asyncio.to_thread(_fetch_atr_source, ticker, mode)
+                atr_result = atr_levels(
+                    atr_source_df,
+                    intraday_df=intraday_df,
+                    trading_mode=mode,
+                    use_current_close=ucc,
+                )
+
+                # Distance from EMA48 as %
+                distance_pct = (
+                    ((last_close - ema48) / ema48) * 100 if ema48 > 0 else 0.0
+                )
+
+                return VomyHit(
+                    ticker=ticker.upper(),
+                    last_close=round(last_close, 2),
+                    signal=signal,
+                    ema13=round(ema13, 4),
+                    ema21=round(ema21, 4),
+                    ema34=round(ema34, 4),
+                    ema48=round(ema48, 4),
+                    distance_from_ema48_pct=round(distance_pct, 2),
+                    atr=atr_result["atr"],
+                    pdc=atr_result["pdc"],
+                    atr_status=atr_result["atr_status"],
+                    atr_covered_pct=atr_result["atr_covered_pct"],
+                    trend=atr_result["trend"],
+                    trading_mode=mode,
+                    timeframe=request.timeframe,
+                )
+            except Exception as exc:
+                logger.debug("VOMY scan error for %s: %s", ticker, exc)
+                errors += 1
+                return None
+
+    results = await asyncio.gather(*(_process_ticker(t) for t in tickers))
+    hits = [r for r in results if r is not None]
+
+    # Sort by abs(distance_from_ema48_pct) ascending — freshest transitions first
+    hits.sort(key=lambda h: abs(h.distance_from_ema48_pct))
+
+    elapsed = round(time.monotonic() - t0, 2)
+    logger.info(
+        "VOMY scan complete: %d hits, %d errors, %d skipped, %.1fs",
+        len(hits),
+        errors,
+        skipped_low_price,
+        elapsed,
+    )
+
+    return VomyScanResponse(
+        hits=hits,
+        total_scanned=len(tickers),
+        total_hits=len(hits),
+        total_errors=errors,
+        skipped_low_price=skipped_low_price,
+        scan_duration_seconds=elapsed,
+        signal_type=request.signal_type,
+        timeframe=request.timeframe,
+    )
