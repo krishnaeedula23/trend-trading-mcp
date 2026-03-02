@@ -17,7 +17,7 @@ import type { VomyHit, AtrStatus, Trend } from "@/lib/types"
 import { createIdea } from "@/hooks/use-ideas"
 import { categorizeError } from "@/lib/errors"
 
-type SortKey = "ticker" | "last_close" | "distance" | "atr_covered" | "ema13" | "trend"
+type SortKey = "ticker" | "last_close" | "distance" | "atr_covered" | "ema13" | "trend" | "conviction"
 
 // --- Badge helpers ---
 
@@ -63,6 +63,19 @@ function trendLabel(trend: Trend): string {
   }
 }
 
+function convictionBadge(hit: VomyHit): { text: string; color: string } | null {
+  if (!hit.conviction_type) return null
+  const bars = hit.conviction_bars_ago ?? 0
+  if (hit.conviction_confirmed) {
+    if (hit.conviction_type === "bullish_crossover") {
+      return { text: `Conv \u2191 (${bars}b)`, color: "bg-emerald-600/20 text-emerald-400 border-emerald-600/30" }
+    }
+    return { text: `Conv \u2193 (${bars}b)`, color: "bg-red-600/20 text-red-400 border-red-600/30" }
+  }
+  const arrow = hit.conviction_type === "bullish_crossover" ? "\u2191" : "\u2193"
+  return { text: `${arrow} (${bars}b)`, color: "bg-zinc-600/20 text-zinc-400 border-zinc-600/30" }
+}
+
 // --- Save as Idea button ---
 
 function SaveButton({ hit }: { hit: VomyHit }) {
@@ -83,9 +96,10 @@ function SaveButton({ hit }: { hit: VomyHit }) {
           "screener:vomy",
           `signal:${hit.signal}`,
           `atr:${hit.atr_status}`,
+          ...(hit.conviction_confirmed ? ["conviction:confirmed"] : []),
         ],
         source: "screener",
-        notes: `${hit.signal.toUpperCase()} scanner hit — EMA ribbon flip on ${hit.timeframe}, dist ${hit.distance_from_ema48_pct > 0 ? "+" : ""}${hit.distance_from_ema48_pct.toFixed(1)}% from EMA48, ATR ${hit.atr_covered_pct.toFixed(0)}% (${hit.atr_status})`,
+        notes: `${hit.signal.toUpperCase()} scanner hit — EMA ribbon flip on ${hit.timeframe}, dist ${hit.distance_from_ema48_pct > 0 ? "+" : ""}${hit.distance_from_ema48_pct.toFixed(1)}% from EMA48, ATR ${hit.atr_covered_pct.toFixed(0)}% (${hit.atr_status})${hit.conviction_confirmed ? `, conviction ${hit.conviction_type === "bullish_crossover" ? "↑" : "↓"} ${hit.conviction_bars_ago}b ago` : ""}`,
       })
       setSaved(true)
       toast.success(`${hit.ticker} saved as idea`)
@@ -122,6 +136,7 @@ function SaveButton({ hit }: { hit: VomyHit }) {
 export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("distance")
   const [sortAsc, setSortAsc] = useState(true)
+  const [convictionOnly, setConvictionOnly] = useState(false)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((p) => !p)
@@ -131,8 +146,13 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!convictionOnly) return hits
+    return hits.filter((h) => h.conviction_confirmed)
+  }, [hits, convictionOnly])
+
   const sorted = useMemo(() => {
-    const arr = [...hits]
+    const arr = [...filtered]
     const dir = sortAsc ? 1 : -1
     arr.sort((a, b) => {
       switch (sortKey) {
@@ -150,12 +170,18 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
           const order: Record<Trend, number> = { bullish: 0, neutral: 1, bearish: 2 }
           return dir * (order[a.trend] - order[b.trend])
         }
+        case "conviction": {
+          const aConf = a.conviction_confirmed ? 0 : 1
+          const bConf = b.conviction_confirmed ? 0 : 1
+          if (aConf !== bConf) return dir * (aConf - bConf)
+          return dir * ((a.conviction_bars_ago ?? 99) - (b.conviction_bars_ago ?? 99))
+        }
         default:
           return 0
       }
     })
     return arr
-  }, [hits, sortKey, sortAsc])
+  }, [filtered, sortKey, sortAsc])
 
   if (hits.length === 0) return null
 
@@ -170,6 +196,22 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
 
   return (
     <div className="rounded-lg border border-border/50 overflow-hidden">
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        <Button
+          size="sm"
+          variant={convictionOnly ? "default" : "outline"}
+          className="h-6 text-[10px]"
+          onClick={() => setConvictionOnly((p) => !p)}
+        >
+          Conviction Only
+        </Button>
+        {convictionOnly && (
+          <span className="text-[10px] text-muted-foreground">
+            {filtered.length} of {hits.length} hits
+          </span>
+        )}
+      </div>
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -183,6 +225,7 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
             <SortHeader label="Dist %" k="distance" />
             <SortHeader label="ATR %" k="atr_covered" />
             <TableHead className="text-xs">ATR</TableHead>
+            <SortHeader label="Conviction" k="conviction" />
             <SortHeader label="Trend" k="trend" />
             <TableHead className="w-10" />
           </TableRow>
@@ -191,6 +234,7 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
           {sorted.map((hit) => {
             const sig = signalBadge(hit.signal as "vomy" | "ivomy")
             const atr = atrStatusBadge(hit.atr_status)
+            const conv = convictionBadge(hit)
             const distColor = hit.distance_from_ema48_pct >= 0 ? "text-emerald-400" : "text-red-400"
 
             return (
@@ -215,6 +259,15 @@ export function VomyResultsTable({ hits }: { hits: VomyHit[] }) {
                   <Badge variant="outline" className={`text-[10px] ${atr.color}`}>
                     {atr.text}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {conv ? (
+                    <Badge variant="outline" className={`text-[10px] ${conv.color}`}>
+                      {conv.text}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">&mdash;</span>
+                  )}
                 </TableCell>
                 <TableCell className={`text-xs font-medium ${trendColor(hit.trend)}`}>
                   {trendLabel(hit.trend)}

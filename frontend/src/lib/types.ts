@@ -439,6 +439,9 @@ export interface VomyHit {
   trend: Trend
   trading_mode: TradingMode
   timeframe: VomyTimeframe
+  conviction_type: "bullish_crossover" | "bearish_crossover" | null
+  conviction_bars_ago: number | null
+  conviction_confirmed: boolean
 }
 
 export interface VomyScanRequest {
