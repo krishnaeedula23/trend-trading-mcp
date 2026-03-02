@@ -40,24 +40,24 @@ const SCAN_CONFIGS: ScanConfig[] = [
   },
   {
     scan_type: "golden_gate",
-    scan_key: "golden_gate:day:golden_gate",
+    scan_key: "golden_gate:day:golden_gate_up",
     path: "/api/screener/golden-gate-scan",
     body: {
       universes: ["sp500", "nasdaq100"],
       trading_mode: "day",
-      signal_type: "golden_gate",
+      signal_type: "golden_gate_up",
       min_price: 4.0,
       include_premarket: true,
     },
   },
   {
     scan_type: "golden_gate",
-    scan_key: "golden_gate:multiday:golden_gate",
+    scan_key: "golden_gate:multiday:golden_gate_up",
     path: "/api/screener/golden-gate-scan",
     body: {
       universes: ["sp500", "nasdaq100"],
       trading_mode: "multiday",
-      signal_type: "golden_gate",
+      signal_type: "golden_gate_up",
       min_price: 4.0,
       include_premarket: true,
     },

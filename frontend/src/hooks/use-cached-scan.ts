@@ -8,7 +8,8 @@ interface CachedScanData<T> {
 }
 
 /**
- * Fetch cached scan results from Supabase on mount.
+ * Fetch cached scan results from Supabase once (first non-null scanKey).
+ * Subsequent scanKey changes are ignored — use refreshCache to re-fetch.
  * Returns { cachedData, cachedAt, loadingCache, refreshCache }.
  */
 export function useCachedScan<T>(scanKey: string | null) {
