@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -25,6 +25,7 @@ UNIVERSE = {
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def client():
@@ -55,7 +56,10 @@ def mock_universe(tmp_path):
 # Synthetic data helpers
 # ---------------------------------------------------------------------------
 
-def _make_daily_df(base_price: float = 100.0, days: int = 30, growth: float = 0.0) -> pd.DataFrame:
+
+def _make_daily_df(
+    base_price: float = 100.0, days: int = 30, growth: float = 0.0
+) -> pd.DataFrame:
     """Generate synthetic daily OHLCV data.
 
     The growth parameter controls linear price progression from
@@ -76,7 +80,9 @@ def _make_daily_df(base_price: float = 100.0, days: int = 30, growth: float = 0.
 
 
 def _make_premarket_df(
-    high: float = 105.0, low: float = 99.0, close: float = 103.0,
+    high: float = 105.0,
+    low: float = 99.0,
+    close: float = 103.0,
 ) -> pd.DataFrame:
     """Generate synthetic premarket minute-bar data (4:00-9:29 AM ET)."""
     ET = ZoneInfo("America/New_York")
@@ -230,6 +236,50 @@ def _make_put_trigger_daily(base_price: float = 100.0, days: int = 30) -> pd.Dat
     return df
 
 
+def _make_golden_gate_down_daily(
+    base_price: float = 100.0, days: int = 30
+) -> pd.DataFrame:
+    """Build daily data where the last bar triggers a golden_gate_down (bearish) signal.
+
+    golden_gate_down: golden_gate_bear >= bar_low AND mid_range_bear < bar_low AND pdc >= bar_close
+    """
+    dates = pd.bdate_range(end="2026-03-01", periods=days, freq="B")
+    prices = np.full(days, base_price)
+    highs = prices * 1.005
+    lows = prices * 0.995
+
+    df = pd.DataFrame(
+        {
+            "open": prices * 0.999,
+            "high": highs,
+            "low": lows,
+            "close": prices,
+            "volume": [1_000_000] * days,
+        },
+        index=dates,
+    )
+
+    from api.indicators.satyland.atr_levels import _wilder_atr
+
+    atr_series = _wilder_atr(df, 14)
+    atr = float(atr_series.iloc[-2])
+    pdc = float(df["close"].iloc[-2])
+
+    golden_gate_bear = pdc - atr * 0.382
+    mid_range_bear = pdc - atr * 0.618
+
+    # Low between mid_range_bear and golden_gate_bear (so gg_bear >= low and mr_bear < low)
+    target_low = (golden_gate_bear + mid_range_bear) / 2.0
+    # Close must be <= PDC for bearish signal
+    target_close = pdc - atr * 0.1
+
+    df.iloc[-1, df.columns.get_loc("low")] = target_low
+    df.iloc[-1, df.columns.get_loc("high")] = pdc + atr * 0.01
+    df.iloc[-1, df.columns.get_loc("close")] = target_close
+
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -238,12 +288,18 @@ def _make_put_trigger_daily(base_price: float = 100.0, days: int = 30) -> pd.Dat
 class TestGoldenGateScan:
     """Tests for POST /api/screener/golden-gate-scan."""
 
-    def _mock_fetch(self, daily_df: pd.DataFrame, premarket_df: pd.DataFrame | None = None):
-        """Return context managers that patch _fetch_atr_source and _fetch_premarket."""
+    def _mock_fetch(
+        self, daily_df: pd.DataFrame, premarket_df: pd.DataFrame | None = None
+    ):
+        """Return context managers that patch _fetch_atr_source, _fetch_intraday, and _fetch_premarket."""
         return (
             patch(
                 "api.endpoints.screener._fetch_atr_source",
                 side_effect=lambda ticker, mode: daily_df,
+            ),
+            patch(
+                "api.endpoints.screener._fetch_intraday",
+                side_effect=lambda ticker, tf: daily_df,
             ),
             patch(
                 "api.endpoints.screener._fetch_premarket",
@@ -258,9 +314,9 @@ class TestGoldenGateScan:
     # 1. Happy path returns 200
     def test_returns_200(self, client):
         daily = _make_daily_df(base_price=100.0, days=30)
-        p1, p2, p3 = self._mock_fetch(daily)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={"universes": ["sp500"]},
@@ -271,9 +327,9 @@ class TestGoldenGateScan:
     # 2. Response shape
     def test_response_shape(self, client):
         daily = _make_daily_df(base_price=100.0, days=30)
-        p1, p2, p3 = self._mock_fetch(daily)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={"universes": ["sp500"]},
@@ -300,33 +356,135 @@ class TestGoldenGateScan:
     # 3. Hit fields
     def test_hit_fields(self, client):
         daily = _make_golden_gate_daily(base_price=100.0)
-        p1, p2, p3 = self._mock_fetch(daily, premarket_df=None)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
-                json={"universes": ["sp500"], "include_premarket": False},
+                json={
+                    "universes": ["sp500"],
+                    "signal_type": "golden_gate_up",
+                    "include_premarket": False,
+                },
             )
 
         data = resp.json()
         if data["total_hits"] > 0:
             hit = data["hits"][0]
             expected_fields = [
-                "ticker", "last_close", "signal", "direction",
-                "pdc", "atr", "gate_level", "midrange_level",
-                "distance_pct", "atr_status", "atr_covered_pct",
-                "trend", "trading_mode",
+                "ticker",
+                "last_close",
+                "signal",
+                "direction",
+                "pdc",
+                "atr",
+                "gate_level",
+                "midrange_level",
+                "distance_pct",
+                "atr_status",
+                "atr_covered_pct",
+                "trend",
+                "trading_mode",
             ]
             for field in expected_fields:
                 assert field in hit, f"Missing field: {field}"
+            assert hit["signal"] == "golden_gate_up"
+            assert hit["direction"] == "bullish"
+
+    # 3b. golden_gate_up only returns bullish signals
+    def test_signal_type_golden_gate_up(self, client):
+        daily = _make_golden_gate_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/golden-gate-scan",
+                json={
+                    "universes": ["sp500"],
+                    "signal_type": "golden_gate_up",
+                    "include_premarket": False,
+                },
+            )
+
+        data = resp.json()
+        assert data["signal_type"] == "golden_gate_up"
+        for hit in data["hits"]:
+            assert hit["signal"] == "golden_gate_up"
+            assert hit["direction"] == "bullish"
+
+    # 3c. golden_gate_down only returns bearish signals
+    def test_signal_type_golden_gate_down(self, client):
+        daily = _make_golden_gate_down_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/golden-gate-scan",
+                json={
+                    "universes": ["sp500"],
+                    "signal_type": "golden_gate_down",
+                    "include_premarket": False,
+                },
+            )
+
+        data = resp.json()
+        assert data["signal_type"] == "golden_gate_down"
+        for hit in data["hits"]:
+            assert hit["signal"] == "golden_gate_down"
+            assert hit["direction"] == "bearish"
+
+    # 3d. golden_gate (combined) returns bullish or bearish signals
+    def test_signal_type_golden_gate_combined(self, client):
+        """signal_type='golden_gate' checks both directions; hits have directional signal keys."""
+        # Use bullish-triggering data — combined mode should find golden_gate_up
+        daily = _make_golden_gate_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/golden-gate-scan",
+                json={
+                    "universes": ["sp500"],
+                    "signal_type": "golden_gate",
+                    "include_premarket": False,
+                },
+            )
+
+        data = resp.json()
+        assert data["signal_type"] == "golden_gate"
+        # Combined mode emits directional signal keys, not "golden_gate"
+        for hit in data["hits"]:
+            assert hit["signal"] in ("golden_gate_up", "golden_gate_down")
+
+    # 3e. golden_gate combined with bearish data returns golden_gate_down
+    def test_signal_type_golden_gate_combined_bearish(self, client):
+        """signal_type='golden_gate' with bearish data returns golden_gate_down hits."""
+        daily = _make_golden_gate_down_daily(base_price=100.0)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
+
+        with p1, p2, p3, p4:
+            resp = client.post(
+                "/api/screener/golden-gate-scan",
+                json={
+                    "universes": ["sp500"],
+                    "signal_type": "golden_gate",
+                    "include_premarket": False,
+                },
+            )
+
+        data = resp.json()
+        assert data["signal_type"] == "golden_gate"
+        for hit in data["hits"]:
+            assert hit["signal"] == "golden_gate_down"
+            assert hit["direction"] == "bearish"
 
     # 4. Price filter
     def test_price_filter(self, client):
         """Stocks below min_price are excluded and counted as skipped_low_price."""
         daily = _make_daily_df(base_price=2.0, days=30)
-        p1, p2, p3 = self._mock_fetch(daily)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={"universes": ["sp500"], "min_price": 4.0},
@@ -341,9 +499,9 @@ class TestGoldenGateScan:
     # 5. Custom tickers merged
     def test_custom_tickers_merged(self, client):
         daily = _make_daily_df(base_price=100.0, days=30)
-        p1, p2, p3 = self._mock_fetch(daily)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={
@@ -359,9 +517,9 @@ class TestGoldenGateScan:
     # 6. signal_type=call_trigger
     def test_signal_type_call_trigger(self, client):
         daily = _make_call_trigger_daily(base_price=100.0)
-        p1, p2, p3 = self._mock_fetch(daily, premarket_df=None)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={
@@ -381,9 +539,9 @@ class TestGoldenGateScan:
     # 7. signal_type=put_trigger
     def test_signal_type_put_trigger(self, client):
         daily = _make_put_trigger_daily(base_price=100.0)
-        p1, p2, p3 = self._mock_fetch(daily, premarket_df=None)
+        p1, p2, p3, p4 = self._mock_fetch(daily, premarket_df=None)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={
@@ -402,9 +560,9 @@ class TestGoldenGateScan:
     # 8. trading_mode=swing is passed through
     def test_trading_mode_swing(self, client):
         daily = _make_daily_df(base_price=100.0, days=30)
-        p1, p2, p3 = self._mock_fetch(daily)
+        p1, p2, p3, p4 = self._mock_fetch(daily)
 
-        with p1, p2, p3:
+        with p1, p2, p3, p4:
             resp = client.post(
                 "/api/screener/golden-gate-scan",
                 json={
@@ -430,6 +588,10 @@ class TestGoldenGateScan:
                 "api.endpoints.screener._fetch_atr_source",
                 side_effect=lambda ticker, mode: daily,
             ),
+            patch(
+                "api.endpoints.screener._fetch_intraday",
+                side_effect=lambda ticker, tf: daily,
+            ),
             premarket_mock as pm_mock,
             patch(
                 "api.endpoints.screener.resolve_use_current_close",
@@ -453,6 +615,10 @@ class TestGoldenGateScan:
         with (
             patch(
                 "api.endpoints.screener._fetch_atr_source",
+                side_effect=RuntimeError("yfinance down"),
+            ),
+            patch(
+                "api.endpoints.screener._fetch_intraday",
                 side_effect=RuntimeError("yfinance down"),
             ),
             patch(

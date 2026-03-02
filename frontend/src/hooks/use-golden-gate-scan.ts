@@ -34,7 +34,7 @@ const CONFIG_KEY = "golden_gate_scan_config"
 const DEFAULT_CONFIG: GoldenGateScanConfig = {
   universes: ["sp500", "nasdaq100"],
   trading_mode: "day",
-  signal_type: "golden_gate",
+  signal_type: "golden_gate_up",
   min_price: 4.0,
   include_premarket: true,
 }

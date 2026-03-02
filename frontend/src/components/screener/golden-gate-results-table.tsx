@@ -24,7 +24,10 @@ type SortKey = "ticker" | "last_close" | "distance" | "atr_covered" | "gate" | "
 function signalBadge(signal: GoldenGateSignalType): { text: string; color: string } {
   switch (signal) {
     case "golden_gate":
-      return { text: "Golden Gate", color: "bg-amber-600/20 text-amber-400 border-amber-600/30" }
+    case "golden_gate_up":
+      return { text: "GG Up", color: "bg-amber-600/20 text-amber-400 border-amber-600/30" }
+    case "golden_gate_down":
+      return { text: "GG Down", color: "bg-purple-600/20 text-purple-400 border-purple-600/30" }
     case "call_trigger":
       return { text: "Call Trigger", color: "bg-emerald-600/20 text-emerald-400 border-emerald-600/30" }
     case "put_trigger":

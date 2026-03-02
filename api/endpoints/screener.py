@@ -31,6 +31,16 @@ from api.indicators.satyland.pivot_ribbon import pivot_ribbon
 from api.indicators.satyland.price_structure import price_structure
 from api.utils.market_hours import resolve_use_current_close
 
+# Default chart timeframe for each trading mode (reverse of TIMEFRAME_TO_MODE).
+# Used by scanners that specify a trading_mode but need intraday_df for the
+# two-DataFrame ATR pattern.
+_MODE_DEFAULT_TF: dict[str, str] = {
+    "day": "15m",
+    "multiday": "1h",
+    "swing": "1d",
+    "position": "1w",
+}
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
@@ -42,7 +52,9 @@ class ScanRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=100)
     timeframe: str = Field(default="1d")
     direction: str = Field(default="bullish")
-    vix: float | None = Field(default=None, description="Current VIX level for bias filter")
+    vix: float | None = Field(
+        default=None, description="Current VIX level for bias filter"
+    )
 
 
 class ScanResultItem(BaseModel):
@@ -84,7 +96,9 @@ async def calculate_trade_plan(
     # Fetch data off the event loop using canonical helpers
     atr_source_df = await asyncio.to_thread(_fetch_atr_source, ticker, mode)
     daily_df = (
-        await asyncio.to_thread(_fetch_daily, ticker) if mode != "day" else atr_source_df
+        await asyncio.to_thread(_fetch_daily, ticker)
+        if mode != "day"
+        else atr_source_df
     )
     intraday_df = await asyncio.to_thread(_fetch_intraday, ticker, timeframe)
 
@@ -136,7 +150,10 @@ async def scan(request: ScanRequest) -> ScanResponse:
         async with sem:
             try:
                 plan = await calculate_trade_plan(
-                    ticker, request.timeframe, request.direction, request.vix,
+                    ticker,
+                    request.timeframe,
+                    request.direction,
+                    request.vix,
                 )
                 return ScanResultItem(
                     ticker=ticker.upper(),
@@ -200,7 +217,9 @@ class MomentumScanRequest(BaseModel):
     )
     min_price: float = Field(default=4.0, ge=0, description="Minimum ask/close price")
     custom_tickers: list[str] | None = Field(
-        default=None, max_length=500, description="Extra tickers to include",
+        default=None,
+        max_length=500,
+        description="Extra tickers to include",
     )
 
 
@@ -418,7 +437,10 @@ async def momentum_scan(request: MomentumScanRequest) -> MomentumScanResponse:
 
     # Score against momentum criteria (off event loop — iterates 700+ tickers)
     hits, errors, skipped = await asyncio.to_thread(
-        _compute_momentum, raw_df, tickers, request.min_price,
+        _compute_momentum,
+        raw_df,
+        tickers,
+        request.min_price,
     )
 
     # Sort by max_pct_change descending
@@ -427,7 +449,10 @@ async def momentum_scan(request: MomentumScanRequest) -> MomentumScanResponse:
     duration = round(time.monotonic() - t0, 2)
     logger.info(
         "Momentum scan complete: %d hits, %d errors, %d skipped, %.1fs",
-        len(hits), errors, skipped, duration,
+        len(hits),
+        errors,
+        skipped,
+        duration,
     )
 
     return MomentumScanResponse(
@@ -454,17 +479,28 @@ class GoldenGateScanRequest(BaseModel):
         description="Universe keys: sp500, nasdaq100, russell2000, or all",
     )
     trading_mode: Literal["day", "multiday", "swing", "position"] = Field(
-        default="day", description="ATR trading mode",
+        default="day",
+        description="ATR trading mode",
     )
-    signal_type: Literal["golden_gate", "call_trigger", "put_trigger"] = Field(
-        default="golden_gate", description="Signal type to scan for",
+    signal_type: Literal[
+        "golden_gate",
+        "golden_gate_up",
+        "golden_gate_down",
+        "call_trigger",
+        "put_trigger",
+    ] = Field(
+        default="golden_gate_up",
+        description="Signal type to scan for",
     )
     min_price: float = Field(default=4.0, ge=0, description="Minimum price filter")
     custom_tickers: list[str] | None = Field(
-        default=None, max_length=500, description="Extra tickers to include",
+        default=None,
+        max_length=500,
+        description="Extra tickers to include",
     )
     include_premarket: bool = Field(
-        default=True, description="Use premarket high/low for Day mode",
+        default=True,
+        description="Use premarket high/low for Day mode",
     )
 
 
@@ -510,37 +546,81 @@ def _check_golden_gate_signal(
 ) -> list[dict]:
     """Check if a ticker matches the golden gate / trigger signal.
 
-    TOS formula for golden gate:
-      golden_gate_up <= high AND midrange_up > high AND pivot <= close
+    Supports five signal_type values:
+      - "golden_gate_up":   bullish only
+      - "golden_gate_down": bearish only
+      - "golden_gate":      combined — checks both, can return up to 2 signals
+      - "call_trigger":     bullish trigger (tighter zone)
+      - "put_trigger":      bearish trigger (tighter zone)
+
+    TOS formulas:
+      Bullish golden gate:
+        golden_gate_bull <= bar_high AND mid_range_bull > bar_high AND pdc <= bar_close
+      Bearish golden gate:
+        golden_gate_bear >= bar_low AND mid_range_bear < bar_low AND pdc >= bar_close
+      Call trigger:
+        trigger_bull <= bar_high AND golden_gate_bull > bar_high AND pdc <= bar_close
+      Put trigger:
+        trigger_bear >= bar_low AND golden_gate_bear < bar_low AND pdc >= bar_close
     """
     levels = atr_result["levels"]
     pdc = atr_result["pdc"]
     signals: list[dict] = []
 
-    if signal_type == "golden_gate":
+    if signal_type in ("golden_gate", "golden_gate_up", "golden_gate_down"):
         # Bull: golden_gate_bull <= bar_high AND midrange_bull > bar_high AND pdc <= bar_close
-        gg_bull = levels["golden_gate_bull"]["price"]
-        mr_bull = levels["mid_range_bull"]["price"]
-        if gg_bull <= bar_high and mr_bull > bar_high and pdc <= bar_close:
-            signals.append({"signal": "golden_gate", "direction": "bullish", "gate_level": gg_bull, "midrange_level": mr_bull})
+        if signal_type in ("golden_gate", "golden_gate_up"):
+            gg_bull = levels["golden_gate_bull"]["price"]
+            mr_bull = levels["mid_range_bull"]["price"]
+            if gg_bull <= bar_high and mr_bull > bar_high and pdc <= bar_close:
+                signals.append(
+                    {
+                        "signal": "golden_gate_up",
+                        "direction": "bullish",
+                        "gate_level": gg_bull,
+                        "midrange_level": mr_bull,
+                    }
+                )
 
         # Bear: golden_gate_bear >= bar_low AND midrange_bear < bar_low AND pdc >= bar_close
-        gg_bear = levels["golden_gate_bear"]["price"]
-        mr_bear = levels["mid_range_bear"]["price"]
-        if gg_bear >= bar_low and mr_bear < bar_low and pdc >= bar_close:
-            signals.append({"signal": "golden_gate", "direction": "bearish", "gate_level": gg_bear, "midrange_level": mr_bear})
+        if signal_type in ("golden_gate", "golden_gate_down"):
+            gg_bear = levels["golden_gate_bear"]["price"]
+            mr_bear = levels["mid_range_bear"]["price"]
+            if gg_bear >= bar_low and mr_bear < bar_low and pdc >= bar_close:
+                signals.append(
+                    {
+                        "signal": "golden_gate_down",
+                        "direction": "bearish",
+                        "gate_level": gg_bear,
+                        "midrange_level": mr_bear,
+                    }
+                )
 
     elif signal_type == "call_trigger":
         ct = levels["trigger_bull"]["price"]
         gg_bull = levels["golden_gate_bull"]["price"]
         if ct <= bar_high and gg_bull > bar_high and pdc <= bar_close:
-            signals.append({"signal": "call_trigger", "direction": "bullish", "gate_level": ct, "midrange_level": gg_bull})
+            signals.append(
+                {
+                    "signal": "call_trigger",
+                    "direction": "bullish",
+                    "gate_level": ct,
+                    "midrange_level": gg_bull,
+                }
+            )
 
     elif signal_type == "put_trigger":
         pt = levels["trigger_bear"]["price"]
         gg_bear = levels["golden_gate_bear"]["price"]
         if pt >= bar_low and gg_bear < bar_low and pdc >= bar_close:
-            signals.append({"signal": "put_trigger", "direction": "bearish", "gate_level": pt, "midrange_level": gg_bear})
+            signals.append(
+                {
+                    "signal": "put_trigger",
+                    "direction": "bearish",
+                    "gate_level": pt,
+                    "midrange_level": gg_bear,
+                }
+            )
 
     return signals
 
@@ -565,7 +645,12 @@ async def golden_gate_scan(request: GoldenGateScanRequest) -> GoldenGateScanResp
                 tickers.append(upper)
                 existing.add(upper)
 
-    logger.info("Golden Gate scan: %d tickers, mode=%s, signal=%s", len(tickers), request.trading_mode, request.signal_type)
+    logger.info(
+        "Golden Gate scan: %d tickers, mode=%s, signal=%s",
+        len(tickers),
+        request.trading_mode,
+        request.signal_type,
+    )
 
     ucc = resolve_use_current_close()
     sem = asyncio.Semaphore(10)
@@ -577,8 +662,17 @@ async def golden_gate_scan(request: GoldenGateScanRequest) -> GoldenGateScanResp
         nonlocal errors, skipped_low_price
         async with sem:
             try:
-                atr_source_df = await asyncio.to_thread(_fetch_atr_source, ticker, request.trading_mode)
-                atr_result = atr_levels(atr_source_df, trading_mode=request.trading_mode, use_current_close=ucc)
+                chart_tf = _MODE_DEFAULT_TF.get(request.trading_mode, "15m")
+                atr_source_df = await asyncio.to_thread(
+                    _fetch_atr_source, ticker, request.trading_mode
+                )
+                intraday_df = await asyncio.to_thread(_fetch_intraday, ticker, chart_tf)
+                atr_result = atr_levels(
+                    atr_source_df,
+                    intraday_df=intraday_df,
+                    trading_mode=request.trading_mode,
+                    use_current_close=ucc,
+                )
                 last_close = atr_result["current_price"]
 
                 if last_close < request.min_price:
@@ -601,7 +695,9 @@ async def golden_gate_scan(request: GoldenGateScanRequest) -> GoldenGateScanResp
                         bar_low = min(bar_low, pm_low)
                         bar_close = pm_close
 
-                matched = _check_golden_gate_signal(atr_result, bar_high, bar_low, bar_close, request.signal_type)
+                matched = _check_golden_gate_signal(
+                    atr_result, bar_high, bar_low, bar_close, request.signal_type
+                )
                 if not matched:
                     return None
 

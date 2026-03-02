@@ -47,13 +47,16 @@ const TRADING_MODE_OPTIONS: { key: TradingMode; label: string }[] = [
 ]
 
 const SIGNAL_TYPE_OPTIONS: { key: GoldenGateSignalType; label: string }[] = [
-  { key: "golden_gate", label: "Golden Gate" },
+  { key: "golden_gate_up", label: "GG Up" },
+  { key: "golden_gate_down", label: "GG Down" },
   { key: "call_trigger", label: "Call Trigger" },
   { key: "put_trigger", label: "Put Trigger" },
 ]
 
 const SIGNAL_LABEL: Record<GoldenGateSignalType, string> = {
   golden_gate: "Golden Gate",
+  golden_gate_up: "Golden Gate Up",
+  golden_gate_down: "Golden Gate Down",
   call_trigger: "Call Trigger",
   put_trigger: "Put Trigger",
 }

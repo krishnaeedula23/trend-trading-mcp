@@ -370,7 +370,12 @@ export interface MomentumScanResponse {
 // Golden Gate Scanner
 // ---------------------------------------------------------------------------
 
-export type GoldenGateSignalType = "golden_gate" | "call_trigger" | "put_trigger"
+export type GoldenGateSignalType =
+  | "golden_gate"
+  | "golden_gate_up"
+  | "golden_gate_down"
+  | "call_trigger"
+  | "put_trigger"
 
 export interface GoldenGateHit {
   ticker: string
