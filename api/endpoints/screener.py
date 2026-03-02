@@ -802,6 +802,9 @@ class VomyHit(BaseModel):
     trend: str
     trading_mode: str
     timeframe: str
+    conviction_type: str | None = None
+    conviction_bars_ago: int | None = None
+    conviction_confirmed: bool = False
 
 
 class VomyScanResponse(BaseModel):
@@ -894,10 +897,12 @@ async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
                     return None
 
                 # Compute EMAs (span-based, NOT Wilder)
-                ema13 = float(close_series.ewm(span=13, adjust=False).mean().iloc[-1])
+                ema13_series = close_series.ewm(span=13, adjust=False).mean()
+                ema48_series = close_series.ewm(span=48, adjust=False).mean()
+                ema13 = float(ema13_series.iloc[-1])
                 ema21 = float(close_series.ewm(span=21, adjust=False).mean().iloc[-1])
                 ema34 = float(close_series.ewm(span=34, adjust=False).mean().iloc[-1])
-                ema48 = float(close_series.ewm(span=48, adjust=False).mean().iloc[-1])
+                ema48 = float(ema48_series.iloc[-1])
 
                 # Check signal
                 signal = _check_vomy_signal(
@@ -905,6 +910,32 @@ async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
                 )
                 if signal is None:
                     return None
+
+                # --- 13/48 conviction crossover (within 4 bars) ---
+                conviction_type: str | None = None
+                conviction_bars_ago: int | None = None
+                n = len(ema13_series)
+                lookback = min(4, n - 2)
+                for bars_ago in range(1, lookback + 1):
+                    idx = n - 1 - bars_ago
+                    prev_13_above = float(ema13_series.iloc[idx - 1]) >= float(
+                        ema48_series.iloc[idx - 1]
+                    )
+                    curr_13_above = float(ema13_series.iloc[idx]) >= float(
+                        ema48_series.iloc[idx]
+                    )
+                    if not prev_13_above and curr_13_above:
+                        conviction_type = "bullish_crossover"
+                        conviction_bars_ago = bars_ago
+                        break
+                    elif prev_13_above and not curr_13_above:
+                        conviction_type = "bearish_crossover"
+                        conviction_bars_ago = bars_ago
+                        break
+
+                conviction_confirmed = (
+                    signal == "vomy" and conviction_type == "bearish_crossover"
+                ) or (signal == "ivomy" and conviction_type == "bullish_crossover")
 
                 # Enrich hits with ATR data
                 mode = _VOMY_TF_TO_MODE.get(request.timeframe, "swing")
@@ -937,6 +968,9 @@ async def vomy_scan(request: VomyScanRequest) -> VomyScanResponse:
                     trend=atr_result["trend"],
                     trading_mode=mode,
                     timeframe=request.timeframe,
+                    conviction_type=conviction_type,
+                    conviction_bars_ago=conviction_bars_ago,
+                    conviction_confirmed=conviction_confirmed,
                 )
             except Exception as exc:
                 logger.debug("VOMY scan error for %s: %s", ticker, exc)
