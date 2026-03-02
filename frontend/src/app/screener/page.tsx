@@ -6,8 +6,11 @@ import { MomentumControls } from "@/components/screener/momentum-controls"
 import { MomentumResultsTable } from "@/components/screener/momentum-results-table"
 import { GoldenGateControls } from "@/components/screener/golden-gate-controls"
 import { GoldenGateResultsTable } from "@/components/screener/golden-gate-results-table"
+import { VomyControls } from "@/components/screener/vomy-controls"
+import { VomyResultsTable } from "@/components/screener/vomy-results-table"
 import { useMomentumScan } from "@/hooks/use-momentum-scan"
 import { useGoldenGateScan } from "@/hooks/use-golden-gate-scan"
+import { useVomyScan } from "@/hooks/use-vomy-scan"
 import { useWatchlists } from "@/hooks/use-watchlists"
 
 function ComingSoon({ name }: { name: string }) {
@@ -21,6 +24,7 @@ function ComingSoon({ name }: { name: string }) {
 export default function ScreenerPage() {
   const momentum = useMomentumScan()
   const goldenGate = useGoldenGateScan()
+  const vomy = useVomyScan()
   const { watchlists } = useWatchlists()
 
   return (
@@ -36,9 +40,7 @@ export default function ScreenerPage() {
         <TabsList>
           <TabsTrigger value="momentum">Momentum</TabsTrigger>
           <TabsTrigger value="golden-gate">Golden Gate</TabsTrigger>
-          <TabsTrigger value="squeeze" disabled>
-            Squeeze <Badge variant="outline" className="ml-1 text-[9px]">Soon</Badge>
-          </TabsTrigger>
+          <TabsTrigger value="vomy">VOMY</TabsTrigger>
           <TabsTrigger value="mean-reversion" disabled>
             Mean Reversion <Badge variant="outline" className="ml-1 text-[9px]">Soon</Badge>
           </TabsTrigger>
@@ -75,8 +77,21 @@ export default function ScreenerPage() {
           <GoldenGateResultsTable hits={goldenGate.hits} />
         </TabsContent>
 
-        <TabsContent value="squeeze">
-          <ComingSoon name="Squeeze" />
+        <TabsContent value="vomy" className="space-y-4">
+          <VomyControls
+            scanning={vomy.scanning}
+            response={vomy.response}
+            error={vomy.error}
+            watchlists={watchlists}
+            initialUniverses={vomy.config.universes}
+            initialMinPrice={vomy.config.min_price}
+            initialTimeframe={vomy.config.timeframe}
+            initialSignalType={vomy.config.signal_type}
+            initialIncludePremarket={vomy.config.include_premarket}
+            onScan={vomy.runScan}
+            onCancel={vomy.cancelScan}
+          />
+          <VomyResultsTable hits={vomy.hits} />
         </TabsContent>
 
         <TabsContent value="mean-reversion">
