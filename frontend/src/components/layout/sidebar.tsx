@@ -11,6 +11,7 @@ import {
   Bell,
   TrendingUp,
   BarChart3,
+  MessageCircle,
   Menu,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,7 @@ const navItems = [
   { label: "Screener", href: "/screener", icon: TrendingUp },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
   { label: "Watchlists", href: "/watchlists", icon: List },
+  { label: "Chat", href: "/chat", icon: MessageCircle },
   { label: "Alerts", href: "/alerts", icon: Bell, badge: "Soon" },
 ] as const
 
