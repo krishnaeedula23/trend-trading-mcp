@@ -29,7 +29,8 @@ function getBaseUrl(): string {
  */
 export async function railwayFetch(
   path: string,
-  body?: unknown
+  body?: unknown,
+  opts?: { signal?: AbortSignal }
 ): Promise<Response> {
   const base = getBaseUrl();
   const url = `${base}${path}`;
@@ -39,6 +40,7 @@ export async function railwayFetch(
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    signal: opts?.signal,
   });
 
   if (!res.ok) {

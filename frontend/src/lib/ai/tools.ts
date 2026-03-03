@@ -13,14 +13,25 @@ const screenerTimeframe = z
   .default("1d")
   .describe("Scan timeframe")
 
+/** Max time for a single Railway API call inside the chat (seconds). */
+const TOOL_TIMEOUT_MS = 15_000
+
 async function safeRailwayFetch(
   path: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
   try {
-    const res = await railwayFetch(path, body)
+    const res = await railwayFetch(path, body, {
+      signal: AbortSignal.timeout(TOOL_TIMEOUT_MS),
+    })
     return await res.json()
   } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      return {
+        error: true,
+        message: `Request to ${path} timed out after ${TOOL_TIMEOUT_MS / 1000}s. Try a single-ticker tool instead of a full scan.`,
+      }
+    }
     const message = e instanceof Error ? e.message : "Unknown error"
     return { error: true, message: `API request failed: ${message}` }
   }
@@ -41,7 +52,7 @@ export const tradingTools = {
 
   run_vomy_scan: tool({
     description:
-      "Run the VOMY screener to find stocks with volume-momentum signals. Returns bullish/bearish/both hits across S&P 500 and NASDAQ 100.",
+      "Run a LIVE VOMY screener (scans 500+ tickers, may be slow). ALWAYS try get_cached_scan with key 'vomy:1d:both' first. Only use this if no cached results exist and user explicitly asks for a live scan.",
     inputSchema: z.object({
       timeframe: screenerTimeframe,
       signal_type: z
@@ -62,7 +73,7 @@ export const tradingTools = {
 
   run_golden_gate_scan: tool({
     description:
-      "Run the Golden Gate screener to find stocks at golden gate entry levels. Supports day and multiday trading modes.",
+      "Run a LIVE Golden Gate screener (scans 500+ tickers, may be slow). ALWAYS try get_cached_scan with key 'golden_gate:day:golden_gate_up' first. Only use this if no cached results exist and user explicitly asks for a live scan.",
     inputSchema: z.object({
       trading_mode: z
         .enum(["day", "multiday"])
@@ -86,7 +97,7 @@ export const tradingTools = {
 
   run_momentum_scan: tool({
     description:
-      "Run the momentum screener to find stocks with strong momentum across all phases.",
+      "Run a LIVE momentum screener (scans 500+ tickers, may be slow). ALWAYS try get_cached_scan with key 'momentum:default' first. Only use this if no cached results exist and user explicitly asks for a live scan.",
     inputSchema: z.object({}),
     execute: async () => {
       return safeRailwayFetch("/api/screener/momentum-scan", {
