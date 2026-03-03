@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic"
+import { google } from "@ai-sdk/google"
 import {
   convertToModelMessages,
   stepCountIs,
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json()
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-20250514"),
+    model: google("gemini-2.5-flash"),
     system: TRADING_SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
     tools: tradingTools,
