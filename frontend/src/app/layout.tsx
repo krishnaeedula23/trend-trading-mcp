@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { ChatSheet } from "@/components/chat/chat-sheet";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
           </div>
         </TooltipProvider>
         <Toaster position="bottom-right" />
+        <ChatSheet />
       </body>
     </html>
   );
