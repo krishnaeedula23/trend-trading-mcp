@@ -1,7 +1,7 @@
 "use client"
 
 import type { UIMessage } from "ai"
-import { isToolUIPart } from "ai"
+import { getToolName, isToolUIPart } from "ai"
 import { cn } from "@/lib/utils"
 import { ToolResultCard } from "./tool-result-card"
 import { Bot, User } from "lucide-react"
@@ -39,8 +39,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             )
           }
           if (isToolUIPart(part)) {
-            // v6: tool name is embedded in part.type as "tool-{name}"
-            const toolName = part.type.replace(/^tool-/, "")
+            const toolName = getToolName(part)
             return (
               <ToolResultCard
                 key={key}

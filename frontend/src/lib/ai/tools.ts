@@ -3,23 +3,39 @@ import { z } from "zod"
 import { railwayFetch } from "../railway"
 import { createServerClient } from "../supabase/server"
 
+const satyTimeframe = z
+  .enum(["1m", "5m", "15m", "1h", "4h", "1d", "1w"])
+  .default("1d")
+  .describe("Timeframe for analysis")
+
+const screenerTimeframe = z
+  .enum(["1h", "4h", "1d", "1w"])
+  .default("1d")
+  .describe("Scan timeframe")
+
+async function safeRailwayFetch(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  try {
+    const res = await railwayFetch(path, body)
+    return await res.json()
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error"
+    return { error: true, message: `API request failed: ${message}` }
+  }
+}
+
 export const tradingTools = {
   get_saty_indicators: tool({
     description:
       "Get Saty trading indicators (ATR levels, pivot ribbon, phase oscillator, green flag) for a ticker and timeframe. Use this to analyze a stock's current technical setup.",
     inputSchema: z.object({
       ticker: z.string().describe("Stock ticker symbol, e.g. AAPL"),
-      timeframe: z
-        .enum(["1h", "1d"])
-        .default("1d")
-        .describe("Timeframe for analysis"),
+      timeframe: satyTimeframe,
     }),
     execute: async ({ ticker, timeframe }) => {
-      const res = await railwayFetch("/api/satyland/calculate", {
-        ticker,
-        timeframe,
-      })
-      return await res.json()
+      return safeRailwayFetch("/api/satyland/calculate", { ticker, timeframe })
     },
   }),
 
@@ -27,24 +43,20 @@ export const tradingTools = {
     description:
       "Run the VOMY screener to find stocks with volume-momentum signals. Returns bullish/bearish/both hits across S&P 500 and NASDAQ 100.",
     inputSchema: z.object({
-      timeframe: z
-        .enum(["1h", "1d"])
-        .default("1d")
-        .describe("Scan timeframe"),
+      timeframe: screenerTimeframe,
       signal_type: z
         .enum(["bullish", "bearish", "both"])
         .default("both")
         .describe("Signal direction"),
     }),
     execute: async ({ timeframe, signal_type }) => {
-      const res = await railwayFetch("/api/screener/vomy-scan", {
+      return safeRailwayFetch("/api/screener/vomy-scan", {
         universes: ["sp500", "nasdaq100"],
         timeframe,
         signal_type,
         min_price: 4.0,
         include_premarket: true,
       })
-      return await res.json()
     },
   }),
 
@@ -62,14 +74,13 @@ export const tradingTools = {
         .describe("Signal direction"),
     }),
     execute: async ({ trading_mode, signal_type }) => {
-      const res = await railwayFetch("/api/screener/golden-gate-scan", {
+      return safeRailwayFetch("/api/screener/golden-gate-scan", {
         universes: ["sp500", "nasdaq100"],
         trading_mode,
         signal_type,
         min_price: 4.0,
         include_premarket: true,
       })
-      return await res.json()
     },
   }),
 
@@ -78,11 +89,10 @@ export const tradingTools = {
       "Run the momentum screener to find stocks with strong momentum across all phases.",
     inputSchema: z.object({}),
     execute: async () => {
-      const res = await railwayFetch("/api/screener/momentum-scan", {
+      return safeRailwayFetch("/api/screener/momentum-scan", {
         universes: ["sp500", "nasdaq100"],
         min_price: 4.0,
       })
-      return await res.json()
     },
   }),
 
@@ -91,14 +101,22 @@ export const tradingTools = {
       "Get today's daily trade plan with ATR levels, targets, and bias for key instruments (SPY, SPX, QQQ, NQ, ES).",
     inputSchema: z.object({}),
     execute: async () => {
-      const supabase = createServerClient()
-      const { data } = await supabase
-        .from("daily_trade_plans")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single()
-      return data
+      try {
+        const supabase = createServerClient()
+        const { data, error } = await supabase
+          .from("daily_trade_plans")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
+        if (error || !data) {
+          return { error: true, message: "No trade plan found for today." }
+        }
+        return data
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown error"
+        return { error: true, message: `Failed to fetch trade plan: ${message}` }
+      }
     },
   }),
 
@@ -113,13 +131,21 @@ export const tradingTools = {
         ),
     }),
     execute: async ({ scan_key }) => {
-      const supabase = createServerClient()
-      const { data } = await supabase
-        .from("cached_scans")
-        .select("results, scanned_at")
-        .eq("scan_key", scan_key)
-        .single()
-      return data
+      try {
+        const supabase = createServerClient()
+        const { data, error } = await supabase
+          .from("cached_scans")
+          .select("results, scanned_at")
+          .eq("scan_key", scan_key)
+          .single()
+        if (error || !data) {
+          return { error: true, message: `No cached scan found for key "${scan_key}".` }
+        }
+        return data
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown error"
+        return { error: true, message: `Failed to fetch cached scan: ${message}` }
+      }
     },
   }),
 
@@ -127,12 +153,17 @@ export const tradingTools = {
     description: "Get the user's saved watchlists with ticker symbols.",
     inputSchema: z.object({}),
     execute: async () => {
-      const supabase = createServerClient()
-      const { data } = await supabase
-        .from("watchlists")
-        .select("*")
-        .order("created_at", { ascending: false })
-      return data ?? []
+      try {
+        const supabase = createServerClient()
+        const { data } = await supabase
+          .from("watchlists")
+          .select("*")
+          .order("created_at", { ascending: false })
+        return data ?? []
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown error"
+        return { error: true, message: `Failed to fetch watchlists: ${message}` }
+      }
     },
   }),
 
@@ -147,11 +178,10 @@ export const tradingTools = {
         .describe("Number of strikes around ATM"),
     }),
     execute: async ({ ticker, strike_count }) => {
-      const res = await railwayFetch("/api/options/atm-straddle", {
+      return safeRailwayFetch("/api/options/atm-straddle", {
         ticker,
         strike_count,
       })
-      return await res.json()
     },
   }),
 }

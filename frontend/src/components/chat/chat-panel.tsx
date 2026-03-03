@@ -2,7 +2,6 @@
 
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { ChatMessage } from "./chat-message"
 import { ChatInput } from "./chat-input"
 import { useEffect, useRef, useState } from "react"
@@ -35,7 +34,7 @@ export function ChatPanel({ className }: ChatPanelProps) {
 
   return (
     <div className={`flex flex-col ${className ?? ""}`}>
-      <ScrollArea className="flex-1 px-3" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto px-3" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
             <Bot className="size-8" />
@@ -46,7 +45,7 @@ export function ChatPanel({ className }: ChatPanelProps) {
             <ChatMessage key={message.id} message={message} />
           ))
         )}
-      </ScrollArea>
+      </div>
       <ChatInput
         value={input}
         onChange={setInput}

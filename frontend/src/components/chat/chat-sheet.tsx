@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import {
   Sheet,
   SheetContent,
@@ -14,6 +15,10 @@ import { ChatPanel } from "./chat-panel"
 
 export function ChatSheet() {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
+
+  // Hide when on the dedicated chat page
+  if (pathname.startsWith("/chat")) return null
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
