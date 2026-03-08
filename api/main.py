@@ -18,23 +18,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.endpoints import iv_metrics, market_monitor, options, satyland, schwab, screener
 
-# If SCHWAB_TOKEN_B64 is set (Railway deployment), bootstrap the token file
-# from the env var — but only if no token file exists yet (e.g. first deploy
-# or volume is empty). On subsequent restarts the refreshed token on the
-# persistent volume takes precedence, so we never overwrite it.
+# If SCHWAB_TOKEN_B64 is set (Railway deployment), always write the token file
+# from the env var. This ensures a fresh token (from re-running schwab_auth.py
+# and updating the env var) takes effect immediately on the next deploy,
+# even when the persistent volume still has a stale/expired token file.
 _token_b64 = os.getenv("SCHWAB_TOKEN_B64")
 if _token_b64:
     _token_path = Path(os.getenv("SCHWAB_TOKEN_FILE", "/tmp/schwab_tokens.json"))
-    if not _token_path.exists():
-        try:
-            _token_path.parent.mkdir(parents=True, exist_ok=True)
-            # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
-            _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
-            _token_path.write_bytes(base64.b64decode(_clean_b64))
-        except OSError as e:
-            import warnings
-            warnings.warn(f"Could not write Schwab token to {_token_path}: {e}. "
-                          "Check volume mount permissions.")
+    try:
+        _token_path.parent.mkdir(parents=True, exist_ok=True)
+        # Remove any non-base64 characters (smart quotes, newlines, hidden chars)
+        _clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', _token_b64)
+        _token_path.write_bytes(base64.b64decode(_clean_b64))
+    except OSError as e:
+        import warnings
+        warnings.warn(f"Could not write Schwab token to {_token_path}: {e}. "
+                      "Check volume mount permissions.")
 
 app = FastAPI(
     title="Trend Trading API",

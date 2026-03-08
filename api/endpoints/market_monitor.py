@@ -245,9 +245,15 @@ def _compute_theme_tracker(
 
 @router.post("/refresh-universe")
 async def refresh_universe():
-    """Load seed tickers, fetch fundamentals from Schwab, filter to >= $1B market cap,
-    and upsert to Supabase ``monitor_universe`` table.
+    """Load seed tickers, fetch quotes from Schwab, filter to >= $1B market cap,
+    enrich with sector data, and upsert to Supabase ``monitor_universe`` table.
+
+    Market cap is computed as ``sharesOutstanding × lastPrice`` because Schwab's
+    quote response does not include a ``marketCap`` field directly.  Sector and
+    industry come from yfinance (``Ticker.info``) since Schwab omits those too.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from api.integrations.schwab.client import get_quotes
 
     t0 = time.monotonic()
@@ -256,7 +262,9 @@ async def refresh_universe():
     tickers = await asyncio.to_thread(_load_universe, ["all"])
     logger.info("Refreshing universe: %d seed tickers", len(tickers))
 
-    # Batch-fetch fundamentals from Schwab in chunks of 100
+    # ------------------------------------------------------------------
+    # Phase 1: Schwab batch quotes → market-cap filter
+    # ------------------------------------------------------------------
     records: list[dict] = []
     batch_size = 100
     for i in range(0, len(tickers), batch_size):
@@ -264,14 +272,17 @@ async def refresh_universe():
         try:
             quotes = await asyncio.to_thread(get_quotes, batch)
             for symbol, data in quotes.items():
-                inner = data.get(symbol, data)
-                if not isinstance(inner, dict):
-                    continue
-                fund = inner.get("fundamental", {})
-                ref = inner.get("reference", {})
-                mcap = fund.get("marketCap", 0) or 0
-                sector = fund.get("sector", "Unknown") or "Unknown"
-                industry = fund.get("industry", "Unknown") or "Unknown"
+                fund = data.get("fundamental", {})
+                quote_data = data.get("quote", {})
+                ref = data.get("reference", {})
+
+                shares = fund.get("sharesOutstanding", 0) or 0
+                price = (
+                    quote_data.get("lastPrice")
+                    or quote_data.get("closePrice")
+                    or 0
+                )
+                mcap = shares * price
                 name = ref.get("description", "") or ""
 
                 if mcap >= 1_000_000_000:
@@ -280,15 +291,65 @@ async def refresh_universe():
                             "symbol": symbol.upper(),
                             "name": name,
                             "market_cap": int(mcap),
-                            "sector": sector,
-                            "industry": industry,
+                            "sector": "Unknown",
+                            "industry": "Unknown",
                             "refreshed_at": datetime.now(timezone.utc).isoformat(),
                         }
                     )
         except Exception as exc:
             logger.warning("Schwab batch %d-%d failed: %s", i, i + batch_size, exc)
 
-    # Upsert to Supabase
+    logger.info(
+        "Schwab phase: %d qualified from %d seed in %.1fs",
+        len(records),
+        len(tickers),
+        time.monotonic() - t0,
+    )
+
+    # ------------------------------------------------------------------
+    # Phase 2: Enrich with sector/industry from yfinance (concurrent)
+    # ------------------------------------------------------------------
+    def _fetch_sector(symbol: str) -> tuple[str, str, str]:
+        """Return (symbol, sector, industry) from yfinance."""
+        try:
+            info = yf.Ticker(symbol).info
+            return (
+                symbol,
+                info.get("sector", "Unknown") or "Unknown",
+                info.get("industry", "Unknown") or "Unknown",
+            )
+        except Exception:
+            return symbol, "Unknown", "Unknown"
+
+    if records:
+        t1 = time.monotonic()
+        symbols_to_enrich = [r["symbol"] for r in records]
+        sector_map: dict[str, tuple[str, str]] = {}
+
+        # Use 10 threads — conservative to avoid yfinance rate limits
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = {
+                pool.submit(_fetch_sector, sym): sym
+                for sym in symbols_to_enrich
+            }
+            for fut in as_completed(futures):
+                sym, sector, industry = fut.result()
+                sector_map[sym] = (sector, industry)
+
+        for rec in records:
+            sec, ind = sector_map.get(rec["symbol"], ("Unknown", "Unknown"))
+            rec["sector"] = sec
+            rec["industry"] = ind
+
+        logger.info(
+            "yfinance enrichment: %d stocks in %.1fs",
+            len(records),
+            time.monotonic() - t1,
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 3: Upsert to Supabase
+    # ------------------------------------------------------------------
     if records:
         sb = _get_supabase()
         upsert_batch_size = 500
@@ -320,9 +381,23 @@ async def compute_breadth():
     t0 = time.monotonic()
     sb = _get_supabase()
 
-    # Read universe from Supabase
-    resp = sb.table("monitor_universe").select("symbol, sector").execute()
-    rows = resp.data or []
+    # Read full universe from Supabase (paginate past the 1000-row default)
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        resp = (
+            sb.table("monitor_universe")
+            .select("symbol, sector")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+
     if not rows:
         raise HTTPException(status_code=400, detail="Universe is empty. Run /refresh-universe first.")
 
@@ -330,19 +405,31 @@ async def compute_breadth():
     sector_map = {r["symbol"]: r.get("sector", "Unknown") for r in rows}
     logger.info("Computing breadth for %d tickers", len(tickers))
 
-    # Bulk download ~5 months of daily data
-    raw_df = await asyncio.to_thread(
-        yf.download,
-        tickers,
-        period="5mo",
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-        threads=True,
-    )
+    # Download price data in batches to avoid exceeding thread limits.
+    # yfinance with threads=True spawns one thread per ticker; >1000 causes
+    # RuntimeError.  Batching in groups of 500 keeps it safe and fast.
+    YF_BATCH = 500
+    frames: list[pd.DataFrame] = []
+    for i in range(0, len(tickers), YF_BATCH):
+        chunk = tickers[i : i + YF_BATCH]
+        part = await asyncio.to_thread(
+            yf.download,
+            chunk,
+            period="5mo",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if part is not None and not part.empty:
+            frames.append(part)
 
-    if raw_df is None or raw_df.empty:
+    if not frames:
         raise HTTPException(status_code=502, detail="yfinance download returned empty data.")
+
+    raw_df = pd.concat(frames, axis=1) if len(frames) > 1 else frames[0]
+    # De-duplicate any columns that appear in multiple batches
+    raw_df = raw_df.loc[:, ~raw_df.columns.duplicated()]
 
     # Compute breadth scans
     scans = await asyncio.to_thread(_compute_breadth_scans, raw_df, tickers)
@@ -555,9 +642,23 @@ async def backfill(days: int = Query(default=65, ge=1, le=365)):
     t0 = time.monotonic()
     sb = _get_supabase()
 
-    # Read universe
-    resp = sb.table("monitor_universe").select("symbol, sector").execute()
-    rows = resp.data or []
+    # Read full universe from Supabase (paginate past the 1000-row default)
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        resp = (
+            sb.table("monitor_universe")
+            .select("symbol, sector")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+
     if not rows:
         raise HTTPException(status_code=400, detail="Universe is empty. Run /refresh-universe first.")
 
@@ -565,19 +666,28 @@ async def backfill(days: int = Query(default=65, ge=1, le=365)):
     sector_map = {r["symbol"]: r.get("sector", "Unknown") for r in rows}
     logger.info("Backfill: %d tickers, %d days", len(tickers), days)
 
-    # Single bulk download with period="1y" for ample history
-    raw_df = await asyncio.to_thread(
-        yf.download,
-        tickers,
-        period="1y",
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-        threads=True,
-    )
+    # Download in batches of 500 to avoid exceeding thread limits.
+    YF_BATCH = 500
+    frames: list[pd.DataFrame] = []
+    for i in range(0, len(tickers), YF_BATCH):
+        chunk = tickers[i : i + YF_BATCH]
+        part = await asyncio.to_thread(
+            yf.download,
+            chunk,
+            period="1y",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        if part is not None and not part.empty:
+            frames.append(part)
 
-    if raw_df is None or raw_df.empty:
+    if not frames:
         raise HTTPException(status_code=502, detail="yfinance download returned empty data.")
+
+    raw_df = pd.concat(frames, axis=1) if len(frames) > 1 else frames[0]
+    raw_df = raw_df.loc[:, ~raw_df.columns.duplicated()]
 
     # Determine trading days to backfill
     trading_days = raw_df.index[-days:]
