@@ -465,3 +465,56 @@ export interface VomyScanResponse {
   signal_type: VomySignalType
   timeframe: VomyTimeframe
 }
+
+// ── Market Monitor ──────────────────────────────────────────────────────────
+
+export interface BreadthSnapshotSummary {
+  date: string
+  computed_at: string
+  scans: Record<string, number> // scan_key -> count
+}
+
+export interface DrillDownTicker {
+  symbol: string
+  pct_change: number
+  close: number
+  sector: string
+}
+
+export interface DrillDownResponse {
+  date: string
+  scan_key: string
+  count: number
+  tickers: DrillDownTicker[]
+}
+
+export interface SectorData {
+  gainers_1d: number
+  losers_1d: number
+  net_1d: number
+  gainers_1w: number
+  losers_1w: number
+  net_1w: number
+  gainers_1m: number
+  losers_1m: number
+  net_1m: number
+  gainers_3m: number
+  losers_3m: number
+  net_3m: number
+  rank_1d: number
+  rank_1w: number
+  rank_1m: number
+  rank_3m: number
+  stock_count: number
+}
+
+export interface ThemeTrackerResponse {
+  date: string
+  sectors: Record<string, SectorData>
+}
+
+export interface SectorStocksResponse {
+  date: string
+  sector: string
+  stocks: DrillDownTicker[]
+}
