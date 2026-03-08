@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Seed the ticker universe for the momentum scanner.
+"""Seed the ticker universe for the momentum scanner and market monitor.
 
-Fetches S&P 500, Nasdaq 100, and Russell 2000 ticker lists from
-Wikipedia / free sources, deduplicates, and writes to api/data/universe.json.
+Fetches a comprehensive list of all US exchange-listed equities from SEC EDGAR,
+plus index-specific lists (S&P 500, Nasdaq 100) from Wikipedia. The combined
+universe covers ~8,000+ tickers — the market monitor's refresh-universe endpoint
+uses Schwab fundamentals to filter down to ~2,500 stocks with $1B+ market cap.
 
 Usage:
     python scripts/seed_universe.py
@@ -10,6 +12,7 @@ Usage:
 
 import json
 import logging
+import re
 import sys
 from datetime import datetime, timezone
 from io import StringIO
@@ -17,6 +20,9 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+
+# Regex to identify common-stock tickers (1-5 uppercase letters, no special suffixes)
+_COMMON_STOCK_RE = re.compile(r"^[A-Z]{1,5}$")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -114,71 +120,85 @@ _NASDAQ100_FALLBACK = [
 
 
 # ---------------------------------------------------------------------------
-# Russell 2000 (via iShares IWM holdings CSV or Wikipedia)
+# SEC EDGAR — comprehensive all-exchange-listed equities
 # ---------------------------------------------------------------------------
 
-def fetch_russell2000() -> list[str]:
-    """Fetch Russell 2000 tickers.
+def fetch_sec_edgar() -> list[str]:
+    """Fetch all exchange-listed equity tickers from SEC EDGAR.
 
-    Tries iShares IWM holdings CSV first, then Wikipedia, then fallback.
+    Uses the SEC's company_tickers_exchange.json which lists every company
+    filing with the SEC along with their exchange (NYSE, Nasdaq, etc.).
+    Filters to common-stock tickers only (1-5 uppercase letters, no warrants,
+    units, preferred shares, or other special instruments).
+
+    Returns ~8,000+ tickers covering all US-listed equities.
     """
-    # Approach 1: Try Wikipedia "Russell 2000 Index" page
+    url = "https://www.sec.gov/files/company_tickers_exchange.json"
+    valid_exchanges = {"NYSE", "Nasdaq", "AMEX", "BATS", "CBOE", "NYSEARCA", "NYSEAMERICAN"}
+
     try:
-        url = "https://en.wikipedia.org/wiki/Russell_2000_Index"
-        tables = pd.read_html(url)
-        for table in tables:
-            cols_lower = [str(c).lower() for c in table.columns]
-            for col_idx, col_name in enumerate(cols_lower):
-                if "ticker" in col_name or "symbol" in col_name:
-                    tickers = table.iloc[:, col_idx].astype(str).apply(_normalise_ticker).tolist()
-                    if len(tickers) > 100:
-                        logger.info("Russell 2000: fetched %d tickers from Wikipedia", len(tickers))
-                        return tickers
+        # SEC EDGAR requires a real company/email user-agent per their fair-access policy
+        edgar_headers = {"User-Agent": "SatyTrading admin@satytrading.com", "Accept": "application/json"}
+        resp = requests.get(url, headers=edgar_headers, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Format: {"fields": ["cik","name","ticker","exchange"], "data": [[cik, name, ticker, exchange], ...]}
+        fields = data.get("fields", [])
+        rows = data.get("data", [])
+
+        ticker_idx = fields.index("ticker") if "ticker" in fields else 2
+        exchange_idx = fields.index("exchange") if "exchange" in fields else 3
+
+        tickers: list[str] = []
+        for row in rows:
+            raw_ticker = str(row[ticker_idx]).strip().upper()
+            exchange = str(row[exchange_idx]).strip()
+
+            # Filter: major US exchanges only, common stock tickers only
+            if exchange not in valid_exchanges:
+                continue
+            ticker = _normalise_ticker(raw_ticker)
+            if _COMMON_STOCK_RE.match(ticker):
+                tickers.append(ticker)
+
+        tickers = sorted(set(tickers))
+        logger.info("SEC EDGAR: fetched %d common-stock tickers from %d total filings", len(tickers), len(rows))
+        return tickers
+
     except Exception as exc:
-        logger.debug("Russell 2000 Wikipedia attempt failed: %s", exc)
+        logger.warning("SEC EDGAR fetch failed: %s", exc)
+        return []
 
-    # Approach 2: Fetch from a commonly available GitHub-hosted list
+
+# ---------------------------------------------------------------------------
+# NASDAQ exchange-listed stocks (supplementary)
+# ---------------------------------------------------------------------------
+
+def fetch_nasdaq_listed() -> list[str]:
+    """Fetch all NASDAQ-listed tickers from NASDAQ's FTP-style endpoint.
+
+    This catches tickers that may not appear in the SEC EDGAR file yet
+    (e.g. recently listed IPOs).
+    """
+    url = "https://api.nasdaq.com/api/screener/stocks?tableType=earnings&limit=10000&offset=0"
     try:
-        import urllib.request
-        url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
-        # This won't actually give Russell 2000, so skip to fallback
-        raise ValueError("No reliable free Russell 2000 source")
-    except Exception:
-        pass
-
-    # Approach 3: Use curated fallback (top ~200 Russell 2000 names for MVP)
-    logger.info("Russell 2000: using curated fallback (%d tickers)", len(_RUSSELL2000_FALLBACK))
-    return _RUSSELL2000_FALLBACK.copy()
-
-
-_RUSSELL2000_FALLBACK = [
-    # A representative sample of Russell 2000 constituents
-    "AACG", "AADI", "AAL", "AAON", "AAOI", "AAWW", "ABCB", "ABCL",
-    "ABTX", "ACAD", "ACBI", "ACEL", "ACGL", "ACHC", "ACHR", "ACLS",
-    "ACNB", "ADMA", "ADNT", "ADPT", "ADUS", "AEHR", "AEL", "AERI",
-    "AFCG", "AGIO", "AGYS", "AHCO", "AHH", "AI", "AIMC", "AIN",
-    "AIRS", "AIT", "ALIT", "ALKS", "ALKT", "ALLE", "ALRM", "ALTO",
-    "ALTR", "AM", "AMBA", "AMBC", "AMED", "AMKR", "AMPH", "AMRX",
-    "ANDE", "ANGO", "ANIK", "ANIP", "ANN", "ANNT", "AOSL", "APAM",
-    "APGE", "APPF", "APPN", "ARAY", "ARCB", "ARCO", "ARES", "ARIS",
-    "ARL", "AROC", "ARRY", "ARVN", "ASGN", "ASTE", "ATKR", "ATNI",
-    "ATRO", "AUB", "AVAV", "AVNT", "AVPT", "AX", "AXNX", "AXON",
-    "AXSM", "AZZ", "B", "BANF", "BANR", "BBIO", "BBSI", "BCAL",
-    "BCC", "BCOV", "BCPC", "BDTX", "BEAM", "BECN", "BELFB", "BHE",
-    "BHVN", "BKE", "BKH", "BKU", "BL", "BLBD", "BLKB", "BNR",
-    "BOOT", "BOX", "BRC", "BRCC", "BRKR", "BROS", "BRT", "BSIG",
-    "BTU", "BUR", "BWA", "BWXT", "BXC", "BYD", "CABO", "CAKE",
-    "CALM", "CARG", "CASS", "CATY", "CBRL", "CBT", "CBZ", "CCS",
-    "CCSI", "CDAY", "CDNA", "CENX", "CFFN", "CHCO", "CHEF", "CHH",
-    "CHRD", "CHS", "CHWY", "CIA", "CIM", "CIVI", "CLAR", "CLB",
-    "CLBK", "CLDX", "CLSK", "CMA", "CMCO", "CMN", "CNMD", "CNO",
-    "CNOB", "CNXC", "COHU", "COMP", "COOP", "CORT", "COTY", "COUR",
-    "CPRI", "CRC", "CRDO", "CRNX", "CRS", "CRVL", "CSBR", "CSGS",
-    "CSR", "CSTM", "CTO", "CTRE", "CTVA", "CUZ", "CVAC", "CVBF",
-    "CVLT", "CWH", "CWK", "CXM", "CXT", "CYRX", "CYTK", "DBRG",
-    "DCI", "DCPH", "DDS", "DEI", "DFIN", "DH", "DHC", "DIOD",
-    "DJT", "DLX", "DNLI", "DOCS", "DOOR", "DORM", "DRH", "DRQ",
-]
+        resp = requests.get(url, headers={**_HEADERS, "Accept": "application/json"}, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("data", {}).get("table", {}).get("rows", [])
+        tickers = []
+        for row in rows:
+            raw = str(row.get("symbol", "")).strip().upper()
+            ticker = _normalise_ticker(raw)
+            if _COMMON_STOCK_RE.match(ticker):
+                tickers.append(ticker)
+        tickers = sorted(set(tickers))
+        logger.info("NASDAQ screener: fetched %d common-stock tickers", len(tickers))
+        return tickers
+    except Exception as exc:
+        logger.warning("NASDAQ screener fetch failed: %s — skipping", exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -189,12 +209,13 @@ def main() -> None:
     """Fetch all universe lists, dedup, and write to JSON."""
     sp500 = fetch_sp500()
     nasdaq100 = fetch_nasdaq100()
-    russell2000 = fetch_russell2000()
+    sec_edgar = fetch_sec_edgar()
+    nasdaq_listed = fetch_nasdaq_listed()
 
-    # Build deduplicated "all" list
+    # Build deduplicated "all" list — SEC EDGAR is the broadest source
     seen: set[str] = set()
     all_unique: list[str] = []
-    for ticker in sp500 + nasdaq100 + russell2000:
+    for ticker in sec_edgar + nasdaq_listed + sp500 + nasdaq100:
         upper = ticker.upper()
         if upper not in seen:
             seen.add(upper)
@@ -204,13 +225,14 @@ def main() -> None:
     universe = {
         "sp500": sorted(sp500),
         "nasdaq100": sorted(nasdaq100),
-        "russell2000": sorted(russell2000),
+        "sec_edgar": sorted(sec_edgar),
         "all_unique": all_unique,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {
             "sp500": len(sp500),
             "nasdaq100": len(nasdaq100),
-            "russell2000": len(russell2000),
+            "sec_edgar": len(sec_edgar),
+            "nasdaq_listed": len(nasdaq_listed),
             "all_unique": len(all_unique),
         },
     }
@@ -218,12 +240,13 @@ def main() -> None:
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(universe, indent=2) + "\n")
     logger.info(
-        "Wrote universe to %s — %d unique tickers (SP500=%d, NDX100=%d, R2000=%d)",
+        "Wrote universe to %s — %d unique tickers (SP500=%d, NDX100=%d, SEC_EDGAR=%d, NASDAQ=%d)",
         OUTPUT_PATH,
         len(all_unique),
         len(sp500),
         len(nasdaq100),
-        len(russell2000),
+        len(sec_edgar),
+        len(nasdaq_listed),
     )
 
 
