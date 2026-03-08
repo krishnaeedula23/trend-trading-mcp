@@ -47,12 +47,14 @@ function TickerRow({ ticker, selected, onSelect }: {
         <span className="font-mono font-medium">{ticker.symbol}</span>
         <Badge variant="outline" className="text-[10px]">{ticker.sector}</Badge>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground">${ticker.close.toFixed(2)}</span>
-        <span className={ticker.pct_change >= 0 ? "text-emerald-400" : "text-red-400"}>
-          {ticker.pct_change >= 0 ? "+" : ""}{ticker.pct_change.toFixed(1)}%
-        </span>
-      </div>
+      {ticker.close > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground">${ticker.close.toFixed(2)}</span>
+          <span className={ticker.pct_change >= 0 ? "text-emerald-400" : "text-red-400"}>
+            {ticker.pct_change >= 0 ? "+" : ""}{ticker.pct_change.toFixed(1)}%
+          </span>
+        </div>
+      )}
     </button>
   )
 }

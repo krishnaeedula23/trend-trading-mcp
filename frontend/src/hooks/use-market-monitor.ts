@@ -34,7 +34,10 @@ export function useMarketMonitor() {
           fetch("/api/market-monitor/snapshots?days=30"),
           fetch("/api/market-monitor/theme-tracker"),
         ])
-        if (snapRes.ok) setSnapshots(await snapRes.json())
+        if (snapRes.ok) {
+          const snapData = await snapRes.json()
+          setSnapshots(snapData.snapshots ?? snapData)
+        }
         if (themeRes.ok) setThemeTracker(await themeRes.json())
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load")
@@ -95,7 +98,10 @@ export function useMarketMonitor() {
         fetch("/api/market-monitor/snapshots?days=30"),
         fetch("/api/market-monitor/theme-tracker"),
       ])
-      if (snapRes.ok) setSnapshots(await snapRes.json())
+      if (snapRes.ok) {
+        const snapData = await snapRes.json()
+        setSnapshots(snapData.snapshots ?? snapData)
+      }
       if (themeRes.ok) setThemeTracker(await themeRes.json())
     } catch (err) {
       setError(err instanceof Error ? err.message : "Compute failed")

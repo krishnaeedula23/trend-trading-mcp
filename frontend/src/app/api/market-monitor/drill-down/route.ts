@@ -26,12 +26,32 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const scans = data.scans as Record<string, { tickers?: string[] }> | null
+  const scans = data.scans as Record<string, { count?: number; tickers?: string[] }> | null
   const scanData = scans?.[scan]
-  const tickers = scanData?.tickers ?? []
+  const tickerSymbols = scanData?.tickers ?? []
+
+  // Enrich with sector data from monitor_universe
+  let sectorMap: Record<string, string> = {}
+  if (tickerSymbols.length > 0) {
+    const { data: univData } = await supabase
+      .from("monitor_universe")
+      .select("symbol, sector")
+      .in("symbol", tickerSymbols)
+
+    if (univData) {
+      sectorMap = Object.fromEntries(univData.map((r) => [r.symbol, r.sector ?? "Unknown"]))
+    }
+  }
+
+  const tickers = tickerSymbols.map((symbol) => ({
+    symbol,
+    sector: sectorMap[symbol] ?? "Unknown",
+    close: 0,
+    pct_change: 0,
+  }))
 
   return NextResponse.json({
-    scan,
+    scan_key: scan,
     date,
     count: tickers.length,
     tickers,
