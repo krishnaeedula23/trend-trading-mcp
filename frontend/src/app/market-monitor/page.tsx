@@ -11,7 +11,7 @@ export default function MarketMonitorPage() {
   const monitor = useMarketMonitor()
 
   const lastUpdated = monitor.snapshots.length > 0
-    ? monitor.snapshots[monitor.snapshots.length - 1].computed_at
+    ? monitor.snapshots[0].computed_at
     : null
 
   return (
@@ -21,7 +21,7 @@ export default function MarketMonitorPage() {
         <div>
           <h1 className="text-lg font-semibold">Market Monitor</h1>
           <p className="text-xs text-muted-foreground">
-            Breadth of $1B+ stocks making extreme moves
+            Breadth of {monitor.themeTracker?.universe_size ?? "..."} stocks with $1B+ market cap
             {lastUpdated && (
               <> &middot; Updated {new Date(lastUpdated).toLocaleString()}</>
             )}

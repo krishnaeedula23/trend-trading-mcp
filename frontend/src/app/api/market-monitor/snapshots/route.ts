@@ -36,9 +36,7 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // Reverse so oldest is first (chronological order for charting)
-  snapshots.reverse()
-
+  // Newest date first (descending) — latest data appears leftmost in heat map
   return NextResponse.json(
     { snapshots, days, count: snapshots.length },
     {

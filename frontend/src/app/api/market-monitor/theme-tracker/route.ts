@@ -10,7 +10,10 @@ import { createServerClient } from "@/lib/supabase/server"
  * Frontend format (per sector):
  *   { "Technology": { rank_1d: 1, gainers_1d: 10, losers_1d: 3, net_1d: 7, ... stock_count: 30 }, ... }
  */
-function pivotThemeTracker(raw: Record<string, Array<{ sector: string; gainers: number; losers: number; net: number }>>) {
+function pivotThemeTracker(
+  raw: Record<string, Array<{ sector: string; gainers: number; losers: number; net: number }>>,
+  sectorCounts: Record<string, number>,
+) {
   const sectors: Record<string, Record<string, number>> = {}
   const periods = ["1d", "1w", "1m", "3m"] as const
 
@@ -25,10 +28,7 @@ function pivotThemeTracker(raw: Record<string, Array<{ sector: string; gainers: 
       s[`gainers_${period}`] = entry.gainers
       s[`losers_${period}`] = entry.losers
       s[`net_${period}`] = entry.net
-      // Stock count = gainers + losers (approximation from 1d period)
-      if (period === "1d") {
-        s.stock_count = entry.gainers + entry.losers
-      }
+      s.stock_count = sectorCounts[entry.sector] ?? (entry.gainers + entry.losers)
     })
   }
 
@@ -59,11 +59,25 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Get actual stock counts per sector from monitor_universe
+  const { data: univRows } = await supabase
+    .from("monitor_universe")
+    .select("sector")
+
+  const sectorCounts: Record<string, number> = {}
+  let universeSize = 0
+  for (const row of univRows ?? []) {
+    const s = row.sector ?? "Unknown"
+    sectorCounts[s] = (sectorCounts[s] ?? 0) + 1
+    universeSize++
+  }
+
   const raw = data.theme_tracker ?? {}
-  const sectors = pivotThemeTracker(raw)
+  const sectors = pivotThemeTracker(raw, sectorCounts)
 
   return NextResponse.json({
     date: data.date,
     sectors,
+    universe_size: universeSize,
   })
 }

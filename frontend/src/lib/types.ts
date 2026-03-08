@@ -511,6 +511,7 @@ export interface SectorData {
 export interface ThemeTrackerResponse {
   date: string
   sectors: Record<string, SectorData>
+  universe_size?: number
 }
 
 export interface SectorStocksResponse {
