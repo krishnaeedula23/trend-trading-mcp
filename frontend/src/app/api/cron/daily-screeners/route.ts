@@ -17,10 +17,7 @@ export async function GET(request: NextRequest) {
 
   const start = Date.now()
 
-  // 1. Run all screener scans
-  const scanResults = await runAllScans()
-
-  // 2. Regenerate daily trade plan (premarket session)
+  // 1. Daily trade plan first — this is what the user sees at 6:00 AM
   let tradePlanOk = false
   let tradePlanError: string | undefined
   try {
@@ -29,6 +26,9 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     tradePlanError = String(err)
   }
+
+  // 2. Run all screener scans in parallel
+  const scanResults = await runAllScans()
 
   const totalMs = Date.now() - start
   const succeeded = scanResults.filter((r) => r.success).length

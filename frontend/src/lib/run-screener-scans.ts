@@ -82,53 +82,53 @@ export interface ScanResult {
 }
 
 /**
- * Run all screener scans sequentially, upsert results to Supabase.
+ * Run all screener scans in parallel, upsert results to Supabase.
  * Returns a summary of each scan's outcome.
  */
 export async function runAllScans(): Promise<ScanResult[]> {
   const supabase = createServerClient()
-  const results: ScanResult[] = []
 
-  for (const config of SCAN_CONFIGS) {
-    const start = Date.now()
-    try {
-      const res = await railwayFetch(config.path, config.body)
-      const data = await res.json()
+  const results = await Promise.all(
+    SCAN_CONFIGS.map(async (config): Promise<ScanResult> => {
+      const start = Date.now()
+      try {
+        const res = await railwayFetch(config.path, config.body)
+        const data = await res.json()
 
-      const { error } = await supabase.from("cached_scans").upsert(
-        {
-          scan_type: config.scan_type,
-          scan_key: config.scan_key,
-          results: data,
-          scanned_at: new Date().toISOString(),
-        },
-        { onConflict: "scan_key" },
-      )
+        const { error } = await supabase.from("cached_scans").upsert(
+          {
+            scan_type: config.scan_type,
+            scan_key: config.scan_key,
+            results: data,
+            scanned_at: new Date().toISOString(),
+          },
+          { onConflict: "scan_key" },
+        )
 
-      if (error) {
-        results.push({
-          scan_key: config.scan_key,
-          success: false,
-          error: `Supabase: ${error.message}`,
-          duration_ms: Date.now() - start,
-        })
-      } else {
-        results.push({
+        if (error) {
+          return {
+            scan_key: config.scan_key,
+            success: false,
+            error: `Supabase: ${error.message}`,
+            duration_ms: Date.now() - start,
+          }
+        }
+        return {
           scan_key: config.scan_key,
           success: true,
           total_hits: data.total_hits ?? data.hits?.length ?? 0,
           duration_ms: Date.now() - start,
-        })
+        }
+      } catch (err) {
+        return {
+          scan_key: config.scan_key,
+          success: false,
+          error: String(err),
+          duration_ms: Date.now() - start,
+        }
       }
-    } catch (err) {
-      results.push({
-        scan_key: config.scan_key,
-        success: false,
-        error: String(err),
-        duration_ms: Date.now() - start,
-      })
-    }
-  }
+    }),
+  )
 
   return results
 }
