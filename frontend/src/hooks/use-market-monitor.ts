@@ -23,6 +23,7 @@ export function useMarketMonitor() {
   const [loading, setLoading] = useState(true)
   const [computing, setComputing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [drillDownLoading, setDrillDownLoading] = useState(false)
 
   // Fetch snapshots + theme tracker on mount
   useEffect(() => {
@@ -50,13 +51,16 @@ export function useMarketMonitor() {
     setSelectedSector(null)
     setSectorStocks(null)
     setDrillDown(null)
+    setDrillDownLoading(true)
     try {
       const res = await fetch(
         `/api/market-monitor/drill-down?scan=${encodeURIComponent(scanKey)}&date=${encodeURIComponent(date)}`
       )
       if (res.ok) setDrillDown(await res.json())
     } catch {
-      // drill-down failed silently
+      // drill-down fetch failed
+    } finally {
+      setDrillDownLoading(false)
     }
   }, [])
 
@@ -79,17 +83,22 @@ export function useMarketMonitor() {
   // Force recompute
   const forceRecompute = useCallback(async () => {
     setComputing(true)
+    setError(null)
     try {
       const res = await fetch("/api/market-monitor/compute", { method: "POST" })
-      if (res.ok) {
-        // Reload snapshots + theme tracker
-        const [snapRes, themeRes] = await Promise.all([
-          fetch("/api/market-monitor/snapshots?days=30"),
-          fetch("/api/market-monitor/theme-tracker"),
-        ])
-        if (snapRes.ok) setSnapshots(await snapRes.json())
-        if (themeRes.ok) setThemeTracker(await themeRes.json())
+      if (!res.ok) {
+        setError(`Compute failed: ${res.status}`)
+        return
       }
+      // Reload snapshots + theme tracker
+      const [snapRes, themeRes] = await Promise.all([
+        fetch("/api/market-monitor/snapshots?days=30"),
+        fetch("/api/market-monitor/theme-tracker"),
+      ])
+      if (snapRes.ok) setSnapshots(await snapRes.json())
+      if (themeRes.ok) setThemeTracker(await themeRes.json())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Compute failed")
     } finally {
       setComputing(false)
     }
@@ -113,6 +122,7 @@ export function useMarketMonitor() {
     selectedSector,
     loading,
     computing,
+    drillDownLoading,
     error,
     panelOpen,
     selectCell,

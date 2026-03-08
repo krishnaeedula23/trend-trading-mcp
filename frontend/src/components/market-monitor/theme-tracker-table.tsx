@@ -18,7 +18,9 @@ function rankColor(rank: number): string {
 }
 
 function hasDivergence(data: { rank_1d: number; rank_1w: number; rank_1m: number; rank_3m: number }): boolean {
-  const ranks = [data.rank_1d, data.rank_1w, data.rank_1m, data.rank_3m].filter(Boolean)
+  const ranks = [data.rank_1d, data.rank_1w, data.rank_1m, data.rank_3m].filter(
+    (r): r is number => r != null
+  )
   if (ranks.length < 2) return false
   const hasTop = ranks.some((r) => r <= 3)
   const hasBottom = ranks.some((r) => r >= 7)

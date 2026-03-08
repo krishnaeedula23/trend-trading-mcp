@@ -13,6 +13,7 @@ interface DrillDownPanelProps {
   drillDown: DrillDownResponse | null
   sectorStocks: SectorStocksResponse | null
   selectedSector: string | null
+  loading?: boolean
 }
 
 function ScanLabel({ scanKey }: { scanKey: string }) {
@@ -56,7 +57,7 @@ function TickerRow({ ticker, selected, onSelect }: {
   )
 }
 
-export function DrillDownPanel({ open, onClose, drillDown, sectorStocks, selectedSector }: DrillDownPanelProps) {
+export function DrillDownPanel({ open, onClose, drillDown, sectorStocks, selectedSector, loading }: DrillDownPanelProps) {
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   const tickers = drillDown?.tickers ?? sectorStocks?.stocks ?? []
@@ -119,7 +120,7 @@ export function DrillDownPanel({ open, onClose, drillDown, sectorStocks, selecte
             ))}
             {tickers.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Loading...
+                {loading ? "Loading..." : "No stocks found"}
               </p>
             )}
           </div>

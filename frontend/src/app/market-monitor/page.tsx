@@ -80,6 +80,7 @@ export default function MarketMonitorPage() {
         drillDown={monitor.drillDown}
         sectorStocks={monitor.sectorStocks}
         selectedSector={monitor.selectedSector}
+        loading={monitor.drillDownLoading}
       />
     </div>
   )
