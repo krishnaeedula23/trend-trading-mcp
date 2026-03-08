@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import yfinance as yf
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from supabase import Client, create_client
 
 from api.endpoints.screener import _load_universe
@@ -217,7 +217,7 @@ def _compute_theme_tracker(
                     sector_counts[sector]["losers"] += 1
 
             except Exception:
-                continue
+                logger.debug("Theme tracker error for %s/%s", ticker, period_label)
 
         # Build ranked list
         ranked = []
@@ -324,7 +324,7 @@ async def compute_breadth():
     resp = sb.table("monitor_universe").select("symbol, sector").execute()
     rows = resp.data or []
     if not rows:
-        return {"status": "error", "message": "Universe is empty. Run /refresh-universe first."}
+        raise HTTPException(status_code=400, detail="Universe is empty. Run /refresh-universe first.")
 
     tickers = [r["symbol"] for r in rows]
     sector_map = {r["symbol"]: r.get("sector", "Unknown") for r in rows}
@@ -342,7 +342,7 @@ async def compute_breadth():
     )
 
     if raw_df is None or raw_df.empty:
-        return {"status": "error", "message": "yfinance download returned empty data."}
+        raise HTTPException(status_code=502, detail="yfinance download returned empty data.")
 
     # Compute breadth scans
     scans = await asyncio.to_thread(_compute_breadth_scans, raw_df, tickers)
@@ -510,8 +510,6 @@ async def get_sector_stocks(
         .execute()
     )
 
-    sector_symbols = {r["symbol"] for r in (univ_resp.data or [])}
-
     # Cross-reference: which scans does each sector stock appear in?
     scans_data = {}
     if snap_resp.data:
@@ -561,7 +559,7 @@ async def backfill(days: int = Query(default=65, ge=1, le=365)):
     resp = sb.table("monitor_universe").select("symbol, sector").execute()
     rows = resp.data or []
     if not rows:
-        return {"status": "error", "message": "Universe is empty. Run /refresh-universe first."}
+        raise HTTPException(status_code=400, detail="Universe is empty. Run /refresh-universe first.")
 
     tickers = [r["symbol"] for r in rows]
     sector_map = {r["symbol"]: r.get("sector", "Unknown") for r in rows}
@@ -579,7 +577,7 @@ async def backfill(days: int = Query(default=65, ge=1, le=365)):
     )
 
     if raw_df is None or raw_df.empty:
-        return {"status": "error", "message": "yfinance download returned empty data."}
+        raise HTTPException(status_code=502, detail="yfinance download returned empty data.")
 
     # Determine trading days to backfill
     trading_days = raw_df.index[-days:]

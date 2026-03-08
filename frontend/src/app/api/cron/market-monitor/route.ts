@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
   try {
     const res = await railwayFetch("/api/market-monitor/compute")
     computeResult = await res.json()
-    computeOk = true
+    computeOk = res.ok
+    if (!res.ok) {
+      computeError = `HTTP ${res.status}: ${(computeResult as Record<string, unknown>)?.detail ?? "Unknown error"}`
+    }
   } catch (err) {
     computeError = String(err)
   }

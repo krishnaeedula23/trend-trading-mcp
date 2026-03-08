@@ -6,11 +6,15 @@ export async function GET(request: NextRequest) {
   const days = daysParam ? Math.min(Math.max(parseInt(daysParam, 10) || 30, 1), 365) : 30
 
   const supabase = createServerClient()
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - days)
+  const cutoff = cutoffDate.toISOString().slice(0, 10)
+
   const { data, error } = await supabase
     .from("breadth_snapshots")
     .select("date, universe, scans, computed_at")
+    .gte("date", cutoff)
     .order("date", { ascending: false })
-    .limit(days)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
