@@ -21,7 +21,7 @@ function hasDivergence(data: { rank_1d: number; rank_1w: number; rank_1m: number
   const ranks = [data.rank_1d, data.rank_1w, data.rank_1m, data.rank_3m].filter(Boolean)
   if (ranks.length < 2) return false
   const hasTop = ranks.some((r) => r <= 3)
-  const hasBottom = ranks.some((r) => r >= 9)
+  const hasBottom = ranks.some((r) => r >= 7)
   return hasTop && hasBottom
 }
 
