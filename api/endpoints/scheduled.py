@@ -503,24 +503,42 @@ async def alert_review():
             if not alert_price:
                 alert_price = float(df["open"].iloc[0])
 
-            # Get daily ATR for target/stop reference
+            # Get daily ATR and ribbon for realistic stop/target
             daily_df = await asyncio.to_thread(_fetch_daily, ticker)
             atr_result = atr_levels(daily_df)
             atr_val = atr_result.get("atr", 0)
-            pdc = atr_result.get("pdc", 0)
 
-            # Calculate targets based on setup
+            # Compute ribbon on 5m to get EMA 21 (the pivot) for stop reference
+            from api.indicators.satyland.pivot_ribbon import pivot_ribbon
+            ribbon = pivot_ribbon(df)
+            ema21 = ribbon.get("ema21", 0)
+            ema48 = ribbon.get("ema48", 0)
+
             is_bull = direction == "bullish"
-            # Default targets: 61.8% ATR from PDC (mid-range)
-            if is_bull:
-                target = pdc + atr_val * 0.618 if atr_val else alert_price * 1.005
-                stop = pdc - atr_val * 0.236 if atr_val else alert_price * 0.995
-            else:
-                target = pdc - atr_val * 0.618 if atr_val else alert_price * 0.995
-                stop = pdc + atr_val * 0.236 if atr_val else alert_price * 1.005
 
-            # Analyze price action after the alert
-            # Use all bars from today's session
+            # Stop: other side of ribbon (EMA 48 for most setups)
+            # Target: 1R from entry (risk = distance to stop)
+            if is_bull:
+                stop = ema48 if ema48 and ema48 < alert_price else alert_price - atr_val * 0.236
+                risk = abs(alert_price - stop)
+                target = alert_price + risk  # 1R target
+            else:
+                stop = ema48 if ema48 and ema48 > alert_price else alert_price + atr_val * 0.236
+                risk = abs(stop - alert_price)
+                target = alert_price - risk  # 1R target
+
+            # Ensure minimum risk to avoid division by zero / huge R
+            min_risk = alert_price * 0.002  # 0.2% minimum risk
+            if risk < min_risk:
+                risk = min_risk
+                if is_bull:
+                    stop = alert_price - risk
+                    target = alert_price + risk
+                else:
+                    stop = alert_price + risk
+                    target = alert_price - risk
+
+            # Analyze price action from the session
             closes = df["close"].values
             highs = df["high"].values
             lows = df["low"].values
@@ -544,29 +562,23 @@ async def alert_review():
                 outcome = "Loser"
                 outcome_emoji = "❌"
             elif hit_target and hit_stop:
-                # Both hit — check which came first (simplified: if target was achievable, call it a winner)
                 outcome = "Mixed"
                 outcome_emoji = "⚠️"
             else:
                 outcome = "No Fill"
                 outcome_emoji = "⏳"
 
-            # Calculate R-multiple if we have entry and stop
-            if alert_price and stop and alert_price != stop:
-                risk = abs(alert_price - stop)
-                if is_bull:
-                    best_r = (max_favorable - alert_price) / risk if risk > 0 else 0
-                else:
-                    best_r = (alert_price - max_favorable) / risk if risk > 0 else 0
+            # R-multiples from alert price
+            if is_bull:
+                best_r = round((max_favorable - alert_price) / risk, 1) if risk > 0 else 0
             else:
-                best_r = 0
-                risk = 0
+                best_r = round((alert_price - max_favorable) / risk, 1) if risk > 0 else 0
 
             session_close = float(closes[-1]) if len(closes) > 0 else alert_price
             if is_bull:
-                eod_r = (session_close - alert_price) / risk if risk > 0 else 0
+                eod_r = round((session_close - alert_price) / risk, 1) if risk > 0 else 0
             else:
-                eod_r = (alert_price - session_close) / risk if risk > 0 else 0
+                eod_r = round((alert_price - session_close) / risk, 1) if risk > 0 else 0
 
             reviews.append({
                 "ticker": ticker,
