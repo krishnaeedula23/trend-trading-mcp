@@ -157,7 +157,10 @@ async def tradingview_webhook(
             sb = get_supabase()
             sb.table("trading_alerts").update({
                 "grade": grade_result.get("grade", "error"),
-                "details": grade_result,
+                "details": {
+                    "raw_payload": payload.model_dump(),
+                    "grade_result": grade_result,
+                },
             }).eq("id", alert_id).execute()
         except Exception as e:
             logger.warning(f"Failed to update alert: {e}")

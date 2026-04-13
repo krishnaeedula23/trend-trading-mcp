@@ -456,32 +456,52 @@ async def alert_review():
     from api.indicators.satyland.atr_levels import atr_levels
     from api.endpoints.satyland import _fetch_daily
 
+    # Map TradingView futures/index symbols to yfinance equivalents
+    TICKER_MAP = {
+        "ES1!": "ES=F", "NQ1!": "NQ=F", "CL1!": "CL=F", "GC1!": "GC=F",
+        "RTY1!": "RTY=F", "YM1!": "YM=F", "ZB1!": "ZB=F",
+        "US500": "^GSPC", "US100": "^NDX", "US30": "^DJI",
+        "VIX": "^VIX", "DXY": "DX-Y.NYB",
+    }
+
     reviews = []
     for alert in alerts_data:
-        ticker = alert.get("ticker", "SPY")
+        tv_ticker = alert.get("ticker", "SPY")
+        ticker = TICKER_MAP.get(tv_ticker, tv_ticker)  # Map to yfinance symbol
         setup_type = alert.get("setup_type", "unknown")
         direction = alert.get("direction", "bullish")
         alert_grade = alert.get("grade", "?")
         details = alert.get("details", {})
-        alert_price = 0
 
-        # Extract alert price from details
+        # Extract alert price — check both old and new detail formats
+        alert_price = 0
         if isinstance(details, dict):
             raw = details.get("raw_payload", {})
-            alert_price = raw.get("price", 0) if isinstance(raw, dict) else 0
-        if not alert_price:
-            alert_price = details.get("price", 0) if isinstance(details, dict) else 0
+            if isinstance(raw, dict):
+                alert_price = raw.get("price", 0) or 0
+            # Also check grade_result for nested raw_payload
+            grade_res = details.get("grade_result", {})
+            if not alert_price and isinstance(grade_res, dict):
+                alert_price = grade_res.get("price", 0) or 0
+            # Direct price field
+            if not alert_price:
+                alert_price = details.get("price", 0) or 0
 
         try:
-            # Fetch 1-minute data for the full session to analyze price action after alert
-            df = await asyncio.to_thread(_fetch_intraday, ticker, "1m")
-            if df is None or df.empty or not alert_price:
+            # Fetch 5-minute data (more reliable than 1m after close)
+            df = await asyncio.to_thread(_fetch_intraday, ticker, "5m")
+            if df is None or df.empty:
+                detail = f"No data for {tv_ticker}" if tv_ticker != ticker else "Could not fetch price data"
                 reviews.append({
-                    "ticker": ticker, "setup": setup_type, "direction": direction,
+                    "ticker": tv_ticker, "setup": setup_type, "direction": direction,
                     "grade": alert_grade, "alert_price": alert_price,
-                    "result": "no_data", "detail": "Could not fetch price data",
+                    "result": "no_data", "detail": detail,
                 })
                 continue
+
+            # If no alert price, use session open as proxy
+            if not alert_price:
+                alert_price = float(df["open"].iloc[0])
 
             # Get daily ATR for target/stop reference
             daily_df = await asyncio.to_thread(_fetch_daily, ticker)
