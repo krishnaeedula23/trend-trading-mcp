@@ -84,7 +84,9 @@ async def morning_brief():
             current = atr_result.get("current_price", 0)
             pdc = atr_result.get("pdc", 0)
             atr_val = atr_result.get("atr", 0)
-            atr_pct = atr_result.get("atr_covered_pct", 0)
+            # Pre-market: compute actual distance from PDC as % of ATR (not yesterday's range)
+            premarket_dist = abs(current - pdc) if current and pdc else 0
+            atr_pct = round(premarket_dist / atr_val * 100, 1) if atr_val > 0 else 0
             levels = atr_result.get("levels", {})
 
             # Build MTF ribbon grid — EMA 21, ribbon state, phase, bias candle per TF
