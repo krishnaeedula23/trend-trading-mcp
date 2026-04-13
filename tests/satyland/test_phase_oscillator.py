@@ -217,6 +217,45 @@ class TestMinimumBars:
         assert "phase" in result
 
 
+class TestBilboZoneClassification:
+    """Zone + direction state for Bilbo filtering."""
+
+    def test_zone_keys_present(self, trending_up_df):
+        result = phase_oscillator(trending_up_df)
+        assert "zone" in result
+        assert "direction" in result
+        assert "zone_state" in result
+
+    def test_zone_high_when_above_38_2(self, trending_up_df):
+        result = phase_oscillator(trending_up_df)
+        if result["oscillator"] > 38.2:
+            assert result["zone"] == "high"
+        elif result["oscillator"] < -38.2:
+            assert result["zone"] == "low"
+        else:
+            assert result["zone"] == "mid"
+
+    def test_zone_direction_from_previous(self, trending_up_df):
+        result = phase_oscillator(trending_up_df)
+        if result["oscillator"] > result["oscillator_prev"]:
+            assert result["direction"] == "rising"
+        else:
+            assert result["direction"] == "falling"
+
+    def test_zone_state_composite(self, trending_up_df):
+        result = phase_oscillator(trending_up_df)
+        assert result["zone_state"] == f"{result['zone']}_{result['direction']}"
+
+    def test_bearish_low_zone(self, trending_down_df):
+        result = phase_oscillator(trending_down_df)
+        assert result["zone"] == "low"
+
+    def test_valid_zone_state_values(self, trending_up_df):
+        result = phase_oscillator(trending_up_df)
+        valid = {"high_rising", "high_falling", "mid_rising", "mid_falling", "low_rising", "low_falling"}
+        assert result["zone_state"] in valid
+
+
 class TestInCompressionKey:
     def test_in_compression_key_present(self, trending_up_df):
         """in_compression key must be present in result and be bool."""

@@ -173,6 +173,17 @@ def phase_oscillator(df: pd.DataFrame) -> dict:
     else:
         current_zone = "extreme_down"
 
+    # ── Zone classification for Bilbo filtering ──────────────────────────────
+    if osc_curr > 38.2:
+        zone = "high"
+    elif osc_curr < -38.2:
+        zone = "low"
+    else:
+        zone = "mid"
+
+    direction = "rising" if osc_curr > osc_prev else "falling"
+    zone_state = f"{zone}_{direction}"
+
     return {
         "oscillator":      round(osc_curr, 4),
         "oscillator_prev": round(osc_prev, 4),
@@ -182,6 +193,9 @@ def phase_oscillator(df: pd.DataFrame) -> dict:
         "zone_crosses":    zone_crosses,
         "last_mr_type":    last_mr_type,
         "last_mr_bars_ago": last_mr_bars_ago,
+        "zone":            zone,
+        "direction":       direction,
+        "zone_state":      zone_state,
         "zones": {
             "extreme":      {"up": 100.0,  "down": -100.0},
             "distribution": {"up": 61.8,   "down": -61.8},
