@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["journal"])
+router = APIRouter(prefix="/api", tags=["journal"])
 
 VALID_NOTE_CATEGORIES = ["observation", "emotional", "setup", "lesson"]
 
@@ -48,7 +48,7 @@ def _infer_category(content: str) -> str:
     return "observation"
 
 
-@router.post("/api/journal")
+@router.post("/journal")
 async def create_journal(journal: JournalCreate):
     """Create a journal entry for a trading day."""
     record = {
@@ -69,14 +69,14 @@ async def create_journal(journal: JournalCreate):
     try:
         from api.integrations.supabase_client import get_supabase
         sb = get_supabase()
-        result = sb.table("journal").upsert(record, on_conflict="date").execute()
+        result = sb.table("journal_entries").upsert(record, on_conflict="date").execute()
         return {"status": "created", "journal": result.data[0] if result.data else record}
     except RuntimeError:
         logger.warning("Supabase not configured, returning unsaved record")
         return {"status": "not_saved", "journal": record}
 
 
-@router.get("/api/journal")
+@router.get("/journal")
 async def get_journal(date: str | None = None):
     """Get a journal entry by date (defaults to today)."""
     target_date = date or datetime.date.today().isoformat()
@@ -84,13 +84,13 @@ async def get_journal(date: str | None = None):
     try:
         from api.integrations.supabase_client import get_supabase
         sb = get_supabase()
-        result = sb.table("journal").select("*").eq("date", target_date).execute()
+        result = sb.table("journal_entries").select("*").eq("date", target_date).execute()
         return {"journal": result.data[0] if result.data else None, "date": target_date}
     except RuntimeError:
         return {"journal": None, "date": target_date, "error": "Supabase not configured"}
 
 
-@router.post("/api/notes")
+@router.post("/notes")
 async def create_note(note: NoteCreate):
     """Create a mid-session note, auto-tagged by category if not provided."""
     category = note.category if note.category in VALID_NOTE_CATEGORIES else _infer_category(note.content)
@@ -114,7 +114,7 @@ async def create_note(note: NoteCreate):
         return {"status": "not_saved", "note": record}
 
 
-@router.get("/api/notes")
+@router.get("/notes")
 async def list_notes(date: str | None = None):
     """List mid-session notes, optionally filtered by date."""
     try:

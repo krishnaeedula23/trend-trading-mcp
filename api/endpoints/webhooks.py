@@ -50,8 +50,9 @@ async def tradingview_webhook(
 ):
     """Receive TradingView alert, grade setup, post to Slack, save to Supabase."""
     # 1. Validate token
+    import hmac
     secret = os.environ.get("TRADINGVIEW_WEBHOOK_SECRET", "")
-    if not secret or token != secret:
+    if not secret or not hmac.compare_digest(token, secret):
         raise HTTPException(status_code=401, detail="Invalid webhook token")
 
     from api.indicators.satyland.setups import registered_setups
@@ -93,6 +94,7 @@ async def tradingview_webhook(
         from api.indicators.satyland.pivot_ribbon import pivot_ribbon
         from api.indicators.satyland.price_structure import price_structure
         from api.indicators.satyland.setup_grader import grade_setup
+        from api.indicators.satyland.mtf_score import mtf_score, aggregate_mtf_scores
 
         tf_key = _resolve_timeframe(payload.timeframe)
 
@@ -104,6 +106,11 @@ async def tradingview_webhook(
         phase_result = phase_oscillator(intraday_df)
         structure_result = price_structure(daily_df)
 
+        # Compute MTF score for the current timeframe
+        current_score = mtf_score(intraday_df)
+        tf_label = f"{payload.timeframe}m" if payload.timeframe.isdigit() else payload.timeframe
+        mtf_scores = aggregate_mtf_scores({tf_label: current_score})
+
         grade_result = grade_setup(
             setup_type=payload.setup,
             direction=direction,
@@ -111,7 +118,7 @@ async def tradingview_webhook(
             ribbon=ribbon_result,
             phase=phase_result,
             structure=structure_result,
-            mtf_scores={},
+            mtf_scores=mtf_scores,
         )
     except Exception as e:
         logger.error(f"Grading failed: {e}")

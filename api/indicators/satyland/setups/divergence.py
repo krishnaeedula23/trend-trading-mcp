@@ -107,4 +107,4 @@ class DivergenceEvaluator(SetupEvaluator):
         return self._PROB.get(direction, 0.5)
 
 
-register("divergence", DivergenceEvaluator())
+register("divergence_from_extreme", DivergenceEvaluator())

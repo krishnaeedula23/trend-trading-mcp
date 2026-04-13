@@ -59,13 +59,13 @@ async def create_trade(trade: TradeCreate):
     # Determine status
     status = "open"
     missing_fields = []
-    if not trade.entry_price:
+    if trade.entry_price is None:
         missing_fields.append("entry_price")
-    if not trade.stop_price:
+    if trade.stop_price is None:
         missing_fields.append("stop_price")
-    if not trade.target_price:
+    if trade.target_price is None:
         missing_fields.append("target_price")
-    if not trade.sizing:
+    if trade.sizing is None:
         missing_fields.append("sizing")
     if missing_fields:
         status = "incomplete"

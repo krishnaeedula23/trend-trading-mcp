@@ -21,7 +21,7 @@ class TestDivergence:
         """Divergence with swing, PO divergence, and exhausted ribbon → not skip."""
         inputs = self._make_inputs()
         result = grade_setup(
-            setup_type="divergence",
+            setup_type="divergence_from_extreme",
             direction="bullish",
             swing_type="low",
             po_divergence=True,
@@ -37,7 +37,7 @@ class TestDivergence:
         """No swing_type → swing_formed fails → skip."""
         inputs = self._make_inputs()
         result = grade_setup(
-            setup_type="divergence",
+            setup_type="divergence_from_extreme",
             direction="bullish",
             po_divergence=True,
             **inputs,
@@ -52,7 +52,7 @@ class TestDivergence:
             phase={"phase": "green", "oscillator": 70.0},
         )
         result = grade_setup(
-            setup_type="divergence",
+            setup_type="divergence_from_extreme",
             direction="bearish",
             swing_type="high",
             po_divergence=True,
@@ -67,7 +67,7 @@ class TestDivergence:
         """po_divergence=False → skip."""
         inputs = self._make_inputs()
         result = grade_setup(
-            setup_type="divergence",
+            setup_type="divergence_from_extreme",
             direction="bullish",
             swing_type="low",
             po_divergence=False,
@@ -83,7 +83,7 @@ class TestDivergence:
             "in_compression": False,
         })
         result = grade_setup(
-            setup_type="divergence",
+            setup_type="divergence_from_extreme",
             direction="bullish",
             swing_type="low",
             po_divergence=True,
