@@ -14,10 +14,10 @@ from supabase import create_client, Client
 def get_supabase() -> Client:
     """Get or create the Supabase client singleton.
 
-    Requires SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.
+    Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.
     """
     url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
         raise RuntimeError(
             "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set. "
