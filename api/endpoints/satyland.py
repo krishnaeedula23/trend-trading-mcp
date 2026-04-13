@@ -571,8 +571,11 @@ async def get_mtf_score(req: MTFScoreRequest):
     # Map minute-string timeframes to TIMEFRAME_MAP keys
     _MINUTE_TO_TF: dict[str, str] = {
         "1": "1m",
+        "3": "3m",
         "5": "5m",
+        "10": "10m",
         "15": "15m",
+        "30": "30m",
         "60": "1h",
         "240": "4h",
     }

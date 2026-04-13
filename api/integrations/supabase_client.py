@@ -1,4 +1,8 @@
-"""Supabase client initialization for trading companion data persistence."""
+"""Supabase client initialization for trading companion data persistence.
+
+Uses the service role key (bypasses RLS) because this client is used
+exclusively by the FastAPI server on Railway — never exposed to the frontend.
+"""
 
 import os
 from functools import lru_cache

@@ -6,8 +6,19 @@ Uses backtested probability data from milkmantrades.com (6,466 SPY days).
 """
 
 from typing import Any
+
 from api.indicators.satyland.setups import register
 from api.indicators.satyland.setups.base import SetupEvaluator
+
+
+def _parse_hour(time_est: str | None) -> int | None:
+    """Parse hour from HH:MM string, returning None on failure."""
+    if not time_est:
+        return None
+    try:
+        return int(time_est.split(":")[0])
+    except (ValueError, IndexError):
+        return None
 
 BILBO_PROBABILITIES = {
     "bullish": {
@@ -82,7 +93,8 @@ class GoldenGateEvaluator(SetupEvaluator):
 
         # 3. Early session
         time_est = kw.get("time_est")
-        early = int(time_est.split(":")[0]) < 11 if time_est else False
+        hour = _parse_hour(time_est)
+        early = hour is not None and hour < 11
         flags.append(("early_session", early, f"Time: {time_est or 'unknown'} EST"))
 
         # 4. MTF aligned
@@ -110,7 +122,8 @@ class GoldenGateEvaluator(SetupEvaluator):
             modifiers.append(("bilbo_upgrade", +3, f"Bilbo confirmed ({prob:.0%} backtested) → A+"))
 
         time_est = kw.get("time_est")
-        if time_est and int(time_est.split(":")[0]) >= 13:
+        hour = _parse_hour(time_est)
+        if hour is not None and hour >= 13:
             modifiers.append(("late_session", -1, f"After 1pm EST — lower completion rate"))
 
         return modifiers
