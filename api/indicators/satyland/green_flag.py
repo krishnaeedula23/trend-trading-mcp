@@ -19,6 +19,9 @@ def green_flag_checklist(
     mtf_ribbons: dict[str, dict] | None = None,
 ) -> dict:
     """
+    DEPRECATED: For setup-aware grading, use setup_grader.grade_setup() instead.
+    This function remains for backward compatibility when no setup_type is specified.
+
     Score a trade setup against the 10-flag Green Flag Checklist.
 
     Args:
