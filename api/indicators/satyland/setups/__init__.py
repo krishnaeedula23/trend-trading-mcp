@@ -17,3 +17,6 @@ def get_evaluator(setup_type: str) -> SetupEvaluator:
 
 def registered_setups() -> list[str]:
     return list(_REGISTRY.keys())
+
+
+import api.indicators.satyland.setups.flag_into_ribbon  # noqa: F401
