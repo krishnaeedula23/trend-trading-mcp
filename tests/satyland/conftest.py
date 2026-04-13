@@ -84,6 +84,50 @@ def flat_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def trending_up_250_df() -> pd.DataFrame:
+    """
+    250 bars of linearly increasing prices.
+
+    close[i] = 90 + i  (90 → 339)
+    high  = close + 0.5
+    low   = close - 0.5
+    open  = previous close  (open[0] = 90)
+
+    Long enough for 200-period EMA to converge.
+    EMA8 > EMA13 > EMA21 > EMA48 > EMA200, all rising → fully bullish.
+    """
+    n = 250
+    closes = [90.0 + i for i in range(n)]
+    highs = [c + 0.5 for c in closes]
+    lows = [c - 0.5 for c in closes]
+    opens = [90.0] + closes[:-1]
+    idx = pd.date_range("2024-01-01", periods=n, freq="B")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": closes}, index=idx
+    )
+
+
+@pytest.fixture
+def trending_down_250_df() -> pd.DataFrame:
+    """
+    250 bars of linearly decreasing prices.
+
+    close[i] = 339 − i  (339 → 90)
+    Long enough for 200-period EMA to converge.
+    EMA8 < EMA13 < EMA21 < EMA48 < EMA200, all falling → fully bearish.
+    """
+    n = 250
+    closes = [339.0 - i for i in range(n)]
+    highs = [c + 0.5 for c in closes]
+    lows = [c - 0.5 for c in closes]
+    opens = [339.0] + closes[:-1]
+    idx = pd.date_range("2024-01-01", periods=n, freq="B")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": closes}, index=idx
+    )
+
+
+@pytest.fixture
 def atr_daily_df() -> pd.DataFrame:
     """
     Daily df engineered for known ATR and price-position assertions.
