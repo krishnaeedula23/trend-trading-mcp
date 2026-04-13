@@ -97,16 +97,68 @@ async def morning_brief():
         atr_val = atr_result.get("atr", 0)
         atr_pct = atr_result.get("atr_covered_pct", 0)
         current = atr_result.get("current_price", 0)
+        pdc = atr_result.get("pdc", 0)
+
+        # Bias emoji
+        bias_emoji = {"Strongly Bullish": "🟢🟢", "Bullish": "🟢", "Neutral": "⚪", "Bearish": "🔴", "Strongly Bearish": "🔴🔴"}.get(bias, "⚪")
+        phase_emoji = {"Green": "🟢", "Red": "🔴", "Compression": "🟣"}.get(phase_state, "⚪")
+        vix_emoji = "🟢" if isinstance(vix_reading, (int, float)) and vix_reading < 17 else "🟡" if isinstance(vix_reading, (int, float)) and vix_reading <= 20 else "🔴"
+
+        # ATR levels table
+        atr_levels_text = ""
+        ct = atr_result.get("call_trigger", 0)
+        pt = atr_result.get("put_trigger", 0)
+        gg_bull = levels.get("golden_gate_bull", {}).get("price", 0)
+        gg_bear = levels.get("golden_gate_bear", {}).get("price", 0)
+        mid_bull = levels.get("mid_range_bull", {}).get("price", 0)
+        mid_bear = levels.get("mid_range_bear", {}).get("price", 0)
+        fr_bull = levels.get("full_range_bull", {}).get("price", 0)
+        fr_bear = levels.get("full_range_bear", {}).get("price", 0)
+
+        atr_levels_text = (
+            f"  `+100%  Full Range   {fr_bull:>8.2f}`\n"
+            f"  `+61.8% Mid Range    {mid_bull:>8.2f}`\n"
+            f"  `+38.2% Golden Gate  {gg_bull:>8.2f}`\n"
+            f"  `+23.6% Call Trigger {ct:>8.2f}`\n"
+            f"  ` 0.0%  PDC          {pdc:>8.2f}`  ← Zero Line\n"
+            f"  `-23.6% Put Trigger  {pt:>8.2f}`\n"
+            f"  `-38.2% Golden Gate  {gg_bear:>8.2f}`\n"
+            f"  `-61.8% Mid Range    {mid_bear:>8.2f}`\n"
+            f"  `-100%  Full Range   {fr_bear:>8.2f}`"
+        )
+
+        # Structure levels
+        pdh = structure_result.get("pdh", 0)
+        pdl = structure_result.get("pdl", 0)
+        pmh = structure_result.get("pmh")
+        pml = structure_result.get("pml")
+        structure_text = f"  `PDH  {pdh:>8.2f}`  |  `PDL  {pdl:>8.2f}`"
+        if pmh and pml:
+            structure_text += f"\n  `PMH  {pmh:>8.2f}`  |  `PML  {pml:>8.2f}`"
 
         text = (
-            f"☀️ *Morning Brief — {ticker}*\n\n"
-            f"*Price:* {current:.2f} | *ATR:* {atr_val:.2f} ({atr_pct:.0f}% consumed)\n"
-            f"*Structural Bias:* {bias}\n"
-            f"*Ribbon (1h):* {ribbon_state} | *Phase:* {phase_state}\n"
-            f"*MTF Conviction:* {conviction} (score: {mtf_result.get('min_score', 'N/A')})\n"
-            f"*VIX:* {vix_reading}\n\n"
-            f"*Key Levels:*\n" + "\n".join(f"  • {l}" for l in key_levels_parts) + "\n\n"
-            f"Good luck today. Be patient. Follow your playbook."
+            f"{'─' * 40}\n"
+            f"☀️  *MORNING BRIEF — {ticker}*\n"
+            f"{'─' * 40}\n\n"
+
+            f"*📊 Market Snapshot*\n"
+            f"  Price: *{current:.2f}*  |  ATR: {atr_val:.2f}  |  Room: {100 - atr_pct:.0f}% remaining\n"
+            f"  VIX: {vix_emoji} {vix_reading}\n\n"
+
+            f"*🎯 Indicators*\n"
+            f"  Structural Bias:  {bias_emoji} {bias}\n"
+            f"  Ribbon (1h):      {ribbon_state}\n"
+            f"  Phase Oscillator: {phase_emoji} {phase_state}\n"
+            f"  MTF Conviction:   {conviction} (score: {mtf_result.get('min_score', 'N/A')})\n\n"
+
+            f"*📐 ATR Levels*\n"
+            f"{atr_levels_text}\n\n"
+
+            f"*🏗️ Structure*\n"
+            f"{structure_text}\n\n"
+
+            f"{'─' * 40}\n"
+            f"_Be patient. Follow your playbook. There's always another trade._"
         )
 
     except Exception as e:

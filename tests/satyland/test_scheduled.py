@@ -12,7 +12,7 @@ class TestScheduledEndpoints:
             assert resp.status_code == 200
             data = resp.json()
             assert "message" in data
-            assert "Morning Brief" in data["message"]
+            assert "MORNING BRIEF" in data["message"] or "Morning Brief" in data["message"]
 
     async def test_orb_marker(self):
         transport = ASGITransport(app=app)

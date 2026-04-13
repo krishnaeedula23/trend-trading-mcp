@@ -75,13 +75,22 @@ def format_setup_alert(grade_result: dict, ticker: str, timeframe: str, price: f
     bonus_count = sum(1 for f in grade_result.get("bonus_flags", []) if f["passed"])
     total_bonus = len(grade_result.get("bonus_flags", []))
 
+    grade_emoji = {"A+": "🔥", "A": "✅", "B": "⚠️", "skip": "⛔"}.get(grade, "❓")
+    dir_label = "Long" if direction == "bullish" else "Short"
+
     text = (
-        f"{emoji} *{setup_display} — {ticker} {'Long' if direction == 'bullish' else 'Short'} ({timeframe})*\n"
-        f"Price: {price}\n\n"
+        f"{'─' * 40}\n"
+        f"{emoji}  *{setup_display} — {ticker} {dir_label} ({timeframe})*\n"
+        f"{'─' * 40}\n\n"
+
+        f"  Price: *{price:.2f}*\n"
+        f"  Grade: {grade_emoji} *{grade}*  |  Probability: *{prob:.0%}* ({prob_source})\n\n"
+
         f"*Required:*\n" + "\n".join(req_lines) + "\n\n"
         f"*Bonus ({bonus_count}/{total_bonus}):*\n" + "\n".join(bonus_lines) + "\n\n"
-        f"*Grade: {grade}* | Probability: {prob:.0%} ({prob_source})\n\n"
-        f"Reply \"take\" to log entry, or ignore."
+
+        f"{'─' * 40}\n"
+        f"_Reply *take* to log entry, or ignore._"
     )
     return text
 
