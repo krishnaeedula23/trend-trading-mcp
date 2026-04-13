@@ -98,13 +98,28 @@ async def tradingview_webhook(
 
         tf_key = _resolve_timeframe(payload.timeframe)
 
-        intraday_df = await asyncio.to_thread(_fetch_intraday, payload.ticker, tf_key)
-        daily_df = await asyncio.to_thread(_fetch_daily, payload.ticker)
+        from api.endpoints.satyland import _fetch_premarket
+
+        # Fetch all data in parallel — including VIX and pre-market
+        intraday_df, daily_df, premarket_df, vix_df = await asyncio.gather(
+            asyncio.to_thread(_fetch_intraday, payload.ticker, tf_key),
+            asyncio.to_thread(_fetch_daily, payload.ticker),
+            asyncio.to_thread(_fetch_premarket, payload.ticker),
+            asyncio.to_thread(_fetch_daily, "^VIX"),
+        )
+
+        # VIX reading
+        vix_reading = None
+        try:
+            if vix_df is not None and not vix_df.empty:
+                vix_reading = round(float(vix_df["close"].iloc[-1]), 2)
+        except Exception:
+            pass
 
         atr_result = atr_levels(daily_df, intraday_df)
         ribbon_result = pivot_ribbon(intraday_df)
         phase_result = phase_oscillator(intraday_df)
-        structure_result = price_structure(daily_df)
+        structure_result = price_structure(daily_df, premarket_df)
 
         # Compute MTF score for the current timeframe
         current_score = mtf_score(intraday_df)
@@ -119,6 +134,7 @@ async def tradingview_webhook(
             phase=phase_result,
             structure=structure_result,
             mtf_scores=mtf_scores,
+            vix=vix_reading,
         )
     except Exception as e:
         logger.error(f"Grading failed: {e}")
