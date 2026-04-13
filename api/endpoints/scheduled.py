@@ -499,7 +499,15 @@ async def alert_review():
                 })
                 continue
 
-            # If no alert price, use session open as proxy
+            # Filter to today's bars only
+            try:
+                today_bars = df[df.index.date == datetime.date.today()]
+                if len(today_bars) > 0:
+                    df = today_bars
+            except Exception:
+                pass  # If index doesn't have .date, use all bars
+
+            # If no alert price, use today's session open as proxy
             if not alert_price:
                 alert_price = float(df["open"].iloc[0])
 
