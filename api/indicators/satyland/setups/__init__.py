@@ -21,3 +21,9 @@ def registered_setups() -> list[str]:
 
 import api.indicators.satyland.setups.flag_into_ribbon  # noqa: F401
 import api.indicators.satyland.setups.golden_gate  # noqa: F401
+import api.indicators.satyland.setups.vomy  # noqa: F401
+import api.indicators.satyland.setups.orb  # noqa: F401
+import api.indicators.satyland.setups.squeeze  # noqa: F401
+import api.indicators.satyland.setups.divergence  # noqa: F401
+import api.indicators.satyland.setups.eod_divergence  # noqa: F401
+import api.indicators.satyland.setups.wicky_wicky  # noqa: F401
