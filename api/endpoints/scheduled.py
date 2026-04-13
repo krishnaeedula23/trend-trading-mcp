@@ -87,19 +87,44 @@ async def morning_brief():
             atr_pct = atr_result.get("atr_covered_pct", 0)
             levels = atr_result.get("levels", {})
 
-            # EMA 21 values on 5m and 15m + distance from price
-            ema21_3m = ribbon_3m.get("ema21", 0)  # 5m as proxy
-            ema21_10m = ribbon_10m.get("ema21", 0)  # 15m as proxy
-            dist_3m = current - ema21_3m if ema21_3m else 0
-            dist_10m = current - ema21_10m if ema21_10m else 0
-            dist_3m_pct = (dist_3m / ema21_3m * 100) if ema21_3m else 0
-            dist_10m_pct = (dist_10m / ema21_10m * 100) if ema21_10m else 0
+            # Build MTF ribbon grid — EMA 21, ribbon state, phase, bias candle per TF
+            def _ribbon_row(tf_name, ribbon_data, phase_data=None):
+                state = ribbon_data.get("ribbon_state", "?")
+                state_emoji = {"bullish": "🟢", "bearish": "🔴", "chopzilla": "🟡"}.get(state, "⚪")
+                candle = ribbon_data.get("bias_candle", "?")
+                candle_emoji = {"green": "🟢", "blue": "🔵", "red": "🔴", "orange": "🟠", "gray": "⚪"}.get(candle, "⚪")
+                ema21 = ribbon_data.get("ema21", 0)
+                dist = current - ema21 if ema21 else 0
+                dist_pct = (dist / ema21 * 100) if ema21 else 0
+                # Phase for this TF
+                po_text = ""
+                if phase_data:
+                    po_val = phase_data.get("oscillator", 0)
+                    po_phase = phase_data.get("phase", "?")
+                    po_emoji = {"green": "🟢", "red": "🔴", "compression": "🟣"}.get(po_phase, "⚪")
+                    po_text = f"  |  PO: {po_emoji} {po_val:+.1f}"
+                return (
+                    f"  `{tf_name:>3}` {state_emoji} {state:<10} "
+                    f"Candle: {candle_emoji}  |  "
+                    f"EMA21: `{ema21:.2f}` ({dist:+.2f}, {dist_pct:+.2f}%)"
+                    f"{po_text}"
+                )
+
+            # Compute phase for each TF
+            phase_5m = phase_oscillator(three_min_df)
+            phase_15m = phase_oscillator(ten_min_df)
+            phase_1h = phase_result
+
+            mtf_grid = "\n".join([
+                _ribbon_row("5m", ribbon_3m, phase_5m),
+                _ribbon_row("15m", ribbon_10m, phase_15m),
+                _ribbon_row("1h", ribbon_1h, phase_1h),
+            ])
 
             # Emojis
             bias = structure_result.get("structural_bias", "unknown").replace("_", " ").title()
             bias_emoji = {"Strongly Bullish": "🟢🟢", "Bullish": "🟢", "Neutral": "⚪", "Bearish": "🔴", "Strongly Bearish": "🔴🔴"}.get(bias, "⚪")
             phase_state = phase_result.get("phase", "unknown").title()
-            phase_emoji = {"Green": "🟢", "Red": "🔴", "Compression": "🟣"}.get(phase_state, "⚪")
             ribbon_1h_state = ribbon_1h.get("ribbon_state", "unknown").title()
             vix_emoji = "🟢" if isinstance(vix_reading, (int, float)) and vix_reading < 17 else "🟡" if isinstance(vix_reading, (int, float)) and vix_reading <= 20 else "🔴"
             conviction = mtf_result.get("conviction", "N/A")
@@ -164,15 +189,12 @@ async def morning_brief():
                 f"{nearest_text}\n"
                 f"  VIX: {vix_emoji} {vix_reading}\n\n"
 
-                f"*🎯 Indicators*\n"
+                f"*🎯 Overview*\n"
                 f"  Structural Bias:  {bias_emoji} {bias}\n"
-                f"  Ribbon (1h):      {ribbon_1h_state}\n"
-                f"  Phase Oscillator: {phase_emoji} {phase_state}\n"
                 f"  MTF Conviction:   {conviction} (score: {mtf_result.get('min_score', 'N/A')})\n\n"
 
-                f"*📏 EMA 21 Proximity*\n"
-                f"  5m  EMA 21: `{ema21_3m:>8.2f}`  |  Price {'above' if dist_3m >= 0 else 'below'} by {abs(dist_3m):.2f} ({dist_3m_pct:+.2f}%) {dist_emoji(dist_3m_pct)}\n"
-                f"  15m EMA 21: `{ema21_10m:>8.2f}`  |  Price {'above' if dist_10m >= 0 else 'below'} by {abs(dist_10m):.2f} ({dist_10m_pct:+.2f}%) {dist_emoji(dist_10m_pct)}\n\n"
+                f"*📏 Multi-Timeframe Ribbon*\n"
+                f"{mtf_grid}\n\n"
 
                 f"*📐 ATR Levels*\n"
                 f"  `+100%  Full Range   {fr_bull:>8.2f}`\n"
