@@ -73,6 +73,7 @@ dependencies = [
     "plotly>=5.0.0",
     "seaborn>=0.13.2",
     "kaleido>=0.2.1", # Required for Plotly image export
+    "slack_sdk>=3.33.0",
     # Development tools
     "watchdog>=6.0.0",
     "ty>=0.0.1a19",
