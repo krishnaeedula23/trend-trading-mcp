@@ -11,6 +11,7 @@ PST Schedule:
   8:20am  - euro_close
   9:30am  - midday_nudge
   1:00pm  - journal_prompt
+  1:15pm  - alert_review
   5:00pm  - next_day_prep
   Fri 1pm - weekly_review
 """
@@ -422,3 +423,221 @@ async def weekly_review():
     )
     sent = await send_message(text)
     return {"status": "sent" if sent else "slack_not_configured", "message": text}
+
+
+@router.post("/alert-review")
+async def alert_review():
+    """1:15pm PST — Post-market review of today's alerts vs actual price action."""
+    import asyncio
+    import datetime
+
+    today = datetime.date.today().isoformat()
+    alerts_data = []
+
+    # 1. Fetch today's alerts from Supabase
+    try:
+        from api.integrations.supabase_client import get_supabase
+        sb = get_supabase()
+        result = sb.table("trading_alerts").select("*").eq("date", today).execute()
+        alerts_data = result.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch alerts: {e}")
+        text = format_simple_alert("Alert Review", f"Failed to fetch alerts: {e}")
+        await send_message(text)
+        return {"status": "error", "error": str(e)}
+
+    if not alerts_data:
+        text = format_simple_alert("Alert Review", "No alerts fired today.")
+        await send_message(text)
+        return {"status": "sent", "message": text, "alerts_reviewed": 0}
+
+    # 2. Analyze each alert
+    from api.endpoints.satyland import _fetch_intraday
+    from api.indicators.satyland.atr_levels import atr_levels
+    from api.endpoints.satyland import _fetch_daily
+
+    reviews = []
+    for alert in alerts_data:
+        ticker = alert.get("ticker", "SPY")
+        setup_type = alert.get("setup_type", "unknown")
+        direction = alert.get("direction", "bullish")
+        alert_grade = alert.get("grade", "?")
+        details = alert.get("details", {})
+        alert_price = 0
+
+        # Extract alert price from details
+        if isinstance(details, dict):
+            raw = details.get("raw_payload", {})
+            alert_price = raw.get("price", 0) if isinstance(raw, dict) else 0
+        if not alert_price:
+            alert_price = details.get("price", 0) if isinstance(details, dict) else 0
+
+        try:
+            # Fetch 1-minute data for the full session to analyze price action after alert
+            df = await asyncio.to_thread(_fetch_intraday, ticker, "1m")
+            if df is None or df.empty or not alert_price:
+                reviews.append({
+                    "ticker": ticker, "setup": setup_type, "direction": direction,
+                    "grade": alert_grade, "alert_price": alert_price,
+                    "result": "no_data", "detail": "Could not fetch price data",
+                })
+                continue
+
+            # Get daily ATR for target/stop reference
+            daily_df = await asyncio.to_thread(_fetch_daily, ticker)
+            atr_result = atr_levels(daily_df)
+            atr_val = atr_result.get("atr", 0)
+            pdc = atr_result.get("pdc", 0)
+
+            # Calculate targets based on setup
+            is_bull = direction == "bullish"
+            # Default targets: 61.8% ATR from PDC (mid-range)
+            if is_bull:
+                target = pdc + atr_val * 0.618 if atr_val else alert_price * 1.005
+                stop = pdc - atr_val * 0.236 if atr_val else alert_price * 0.995
+            else:
+                target = pdc - atr_val * 0.618 if atr_val else alert_price * 0.995
+                stop = pdc + atr_val * 0.236 if atr_val else alert_price * 1.005
+
+            # Analyze price action after the alert
+            # Use all bars from today's session
+            closes = df["close"].values
+            highs = df["high"].values
+            lows = df["low"].values
+
+            if is_bull:
+                max_favorable = float(max(highs)) if len(highs) > 0 else alert_price
+                max_adverse = float(min(lows)) if len(lows) > 0 else alert_price
+                hit_target = max_favorable >= target
+                hit_stop = max_adverse <= stop
+            else:
+                max_favorable = float(min(lows)) if len(lows) > 0 else alert_price
+                max_adverse = float(max(highs)) if len(highs) > 0 else alert_price
+                hit_target = max_favorable <= target
+                hit_stop = max_adverse >= stop
+
+            # Determine outcome
+            if hit_target and not hit_stop:
+                outcome = "Winner"
+                outcome_emoji = "✅"
+            elif hit_stop and not hit_target:
+                outcome = "Loser"
+                outcome_emoji = "❌"
+            elif hit_target and hit_stop:
+                # Both hit — check which came first (simplified: if target was achievable, call it a winner)
+                outcome = "Mixed"
+                outcome_emoji = "⚠️"
+            else:
+                outcome = "No Fill"
+                outcome_emoji = "⏳"
+
+            # Calculate R-multiple if we have entry and stop
+            if alert_price and stop and alert_price != stop:
+                risk = abs(alert_price - stop)
+                if is_bull:
+                    best_r = (max_favorable - alert_price) / risk if risk > 0 else 0
+                else:
+                    best_r = (alert_price - max_favorable) / risk if risk > 0 else 0
+            else:
+                best_r = 0
+                risk = 0
+
+            session_close = float(closes[-1]) if len(closes) > 0 else alert_price
+            if is_bull:
+                eod_r = (session_close - alert_price) / risk if risk > 0 else 0
+            else:
+                eod_r = (alert_price - session_close) / risk if risk > 0 else 0
+
+            reviews.append({
+                "ticker": ticker,
+                "setup": setup_type,
+                "direction": direction,
+                "grade": alert_grade,
+                "alert_price": round(alert_price, 2),
+                "target": round(target, 2),
+                "stop": round(stop, 2),
+                "max_favorable": round(max_favorable, 2),
+                "max_adverse": round(max_adverse, 2),
+                "session_close": round(session_close, 2),
+                "best_r": round(best_r, 2),
+                "eod_r": round(eod_r, 2),
+                "result": outcome,
+                "result_emoji": outcome_emoji,
+                "alert_id": alert.get("id"),
+            })
+
+        except Exception as e:
+            logger.warning(f"Alert review failed for {ticker} {setup_type}: {e}")
+            reviews.append({
+                "ticker": ticker, "setup": setup_type, "direction": direction,
+                "grade": alert_grade, "alert_price": alert_price,
+                "result": "error", "detail": str(e),
+            })
+
+    # 3. Build Slack summary
+    winners = [r for r in reviews if r["result"] == "Winner"]
+    losers = [r for r in reviews if r["result"] == "Loser"]
+    total = len(reviews)
+
+    header = (
+        f"{'─' * 40}\n"
+        f"📊  *POST-MARKET ALERT REVIEW*\n"
+        f"{'─' * 40}\n\n"
+        f"Alerts today: *{total}*  |  "
+        f"✅ Winners: *{len(winners)}*  |  "
+        f"❌ Losers: *{len(losers)}*\n\n"
+    )
+
+    details_text = ""
+    for r in reviews:
+        if r["result"] in ("no_data", "error"):
+            details_text += f"  ⚪ {r['ticker']} {r['setup'].replace('_', ' ').title()} — {r.get('detail', 'error')}\n"
+            continue
+
+        emoji = r.get("result_emoji", "?")
+        setup_display = r["setup"].replace("_", " ").title()
+        dir_label = "Long" if r["direction"] == "bullish" else "Short"
+
+        details_text += (
+            f"  {emoji} *{r['ticker']}* {setup_display} ({dir_label}) — Grade: {r['grade']}\n"
+            f"      Alert: {r['alert_price']}  |  Target: {r['target']}  |  Stop: {r['stop']}\n"
+            f"      Best: {r['max_favorable']} ({r['best_r']:+.1f}R)  |  Close: {r['session_close']} ({r['eod_r']:+.1f}R)\n"
+            f"      Result: *{r['result']}*\n\n"
+        )
+
+    # Lesson summary
+    lesson = ""
+    if winners and losers:
+        lesson = f"\n_Review: {len(winners)}/{total} alerts played out. Check the losers — did the thesis break or was timing off?_"
+    elif winners and not losers:
+        lesson = f"\n_All {len(winners)} alerts were winners. Trust the system._"
+    elif losers and not winners:
+        lesson = f"\n_Tough day — {len(losers)} alerts didn't work. Review conditions and filters._"
+
+    text = header + details_text + f"{'─' * 40}" + lesson
+    sent = await send_message(text)
+
+    # 4. Update alert records in Supabase with review data
+    try:
+        sb = get_supabase()
+        for r in reviews:
+            if r.get("alert_id") and r["result"] not in ("no_data", "error"):
+                sb.table("trading_alerts").update({
+                    "details": {
+                        **(alerts_data[reviews.index(r)].get("details") or {}),
+                        "review": {
+                            "result": r["result"],
+                            "target": r.get("target"),
+                            "stop": r.get("stop"),
+                            "max_favorable": r.get("max_favorable"),
+                            "max_adverse": r.get("max_adverse"),
+                            "session_close": r.get("session_close"),
+                            "best_r": r.get("best_r"),
+                            "eod_r": r.get("eod_r"),
+                        },
+                    },
+                }).eq("id", r["alert_id"]).execute()
+    except Exception as e:
+        logger.warning(f"Failed to update alert reviews: {e}")
+
+    return {"status": "sent" if sent else "slack_not_configured", "alerts_reviewed": total, "reviews": reviews}
