@@ -20,3 +20,4 @@ def registered_setups() -> list[str]:
 
 
 import api.indicators.satyland.setups.flag_into_ribbon  # noqa: F401
+import api.indicators.satyland.setups.golden_gate  # noqa: F401
