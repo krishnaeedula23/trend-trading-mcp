@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from api.indicators.satyland.atr_levels import atr_levels
 from api.indicators.satyland.green_flag import green_flag_checklist
+from api.indicators.satyland.setup_grader import grade_setup
 from api.indicators.satyland.mtf_score import aggregate_mtf_scores, mtf_score
 from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.satyland.pivot_ribbon import pivot_ribbon
@@ -108,6 +109,10 @@ class TradePlanRequest(BaseModel):
     atr_period: int = Field(14, ge=5, le=50)
     include_extensions: bool = Field(False)
     use_current_close: bool | None = Field(None)
+    setup_type: str | None = Field(
+        default=None,
+        description="Setup type for setup-aware grading (e.g. flag_into_ribbon, golden_gate)",
+    )
 
 
 class PremarketRequest(BaseModel):
@@ -404,9 +409,21 @@ async def trade_plan(req: TradePlanRequest):
             _fetch_mtf_phases(req.ticker, req.timeframe),
         )
 
-        flags = green_flag_checklist(
-            atr, ribbon, phase, struct, req.direction, req.vix, mtf_ribbons=mtf_ribbons
-        )
+        if req.setup_type:
+            flags = grade_setup(
+                setup_type=req.setup_type,
+                direction=req.direction,
+                atr=atr,
+                ribbon=ribbon,
+                phase=phase,
+                structure=struct,
+                mtf_scores={},
+                vix=req.vix,
+            )
+        else:
+            flags = green_flag_checklist(
+                atr, ribbon, phase, struct, req.direction, req.vix, mtf_ribbons=mtf_ribbons
+            )
 
         return JSONResponse(
             content={
