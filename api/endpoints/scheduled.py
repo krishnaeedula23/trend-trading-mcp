@@ -26,170 +26,210 @@ router = APIRouter(prefix="/api/scheduled", tags=["scheduled"])
 
 @router.post("/morning-brief")
 async def morning_brief():
-    """5:30am PST — Pre-market analysis and key levels for SPY."""
+    """5:30am PST — Pre-market analysis and key levels for SPY and SPX."""
     import asyncio
+    import datetime
 
-    ticker = "SPY"
+    tickers = ["SPY", "^GSPC"]  # SPY + SPX (S&P 500 index)
+    ticker_labels = {"SPY": "SPY", "^GSPC": "SPX"}
+    messages = []
 
+    # Fetch VIX once (shared across both)
+    vix_reading = "N/A"
     try:
-        from api.endpoints.satyland import _fetch_daily, _fetch_intraday, _fetch_premarket
-        from api.indicators.satyland.atr_levels import atr_levels
-        from api.indicators.satyland.pivot_ribbon import pivot_ribbon
-        from api.indicators.satyland.phase_oscillator import phase_oscillator
-        from api.indicators.satyland.price_structure import price_structure
-        from api.indicators.satyland.mtf_score import mtf_score, aggregate_mtf_scores
+        from api.endpoints.satyland import _fetch_daily
+        vix_df = await asyncio.to_thread(_fetch_daily, "^VIX")
+        vix_reading = round(float(vix_df["close"].iloc[-1]), 2)
+    except Exception:
+        pass
 
-        # Fetch data in parallel
-        daily_df, hourly_df, premarket_df = await asyncio.gather(
-            asyncio.to_thread(_fetch_daily, ticker),
-            asyncio.to_thread(_fetch_intraday, ticker, "1h"),
-            asyncio.to_thread(_fetch_premarket, ticker),
-        )
-
-        # Run indicators
-        atr_result = atr_levels(daily_df)
-        ribbon_result = pivot_ribbon(hourly_df)
-        phase_result = phase_oscillator(hourly_df)
-        structure_result = price_structure(daily_df, premarket_df)
-
-        # MTF scores on hourly
-        hourly_score = mtf_score(hourly_df)
-        mtf_result = aggregate_mtf_scores({"1h": hourly_score})
-
-        # VIX
+    for ticker in tickers:
+        label = ticker_labels.get(ticker, ticker)
         try:
-            vix_df = await asyncio.to_thread(_fetch_daily, "^VIX")
-            vix_reading = round(float(vix_df["close"].iloc[-1]), 2)
-        except Exception:
-            vix_reading = "N/A"
+            from api.endpoints.satyland import _fetch_daily, _fetch_intraday, _fetch_premarket
+            from api.indicators.satyland.atr_levels import atr_levels
+            from api.indicators.satyland.pivot_ribbon import pivot_ribbon
+            from api.indicators.satyland.phase_oscillator import phase_oscillator
+            from api.indicators.satyland.price_structure import price_structure
+            from api.indicators.satyland.mtf_score import mtf_score, aggregate_mtf_scores
 
-        # Build key levels string
-        key_levels_parts = []
-        if atr_result.get("call_trigger"):
-            key_levels_parts.append(f"Call Trigger: {atr_result['call_trigger']:.2f}")
-        if atr_result.get("put_trigger"):
-            key_levels_parts.append(f"Put Trigger: {atr_result['put_trigger']:.2f}")
-        if atr_result.get("pdc"):
-            key_levels_parts.append(f"PDC: {atr_result['pdc']:.2f}")
-        levels = atr_result.get("levels", {})
-        if levels.get("golden_gate_bull"):
-            key_levels_parts.append(f"GG+: {levels['golden_gate_bull']['price']:.2f}")
-        if levels.get("golden_gate_bear"):
-            key_levels_parts.append(f"GG-: {levels['golden_gate_bear']['price']:.2f}")
-        if levels.get("mid_range_bull"):
-            key_levels_parts.append(f"Mid+: {levels['mid_range_bull']['price']:.2f}")
-        if levels.get("mid_range_bear"):
-            key_levels_parts.append(f"Mid-: {levels['mid_range_bear']['price']:.2f}")
-        if structure_result.get("pdh"):
-            key_levels_parts.append(f"PDH: {structure_result['pdh']:.2f}")
-        if structure_result.get("pdl"):
-            key_levels_parts.append(f"PDL: {structure_result['pdl']:.2f}")
-        if structure_result.get("pmh"):
-            key_levels_parts.append(f"PMH: {structure_result['pmh']:.2f}")
-        if structure_result.get("pml"):
-            key_levels_parts.append(f"PML: {structure_result['pml']:.2f}")
+            # Fetch data in parallel — daily, 1h, 15m (proxy for 10m), 5m (proxy for 3m), premarket
+            # yfinance supports: 1m, 5m, 15m, 1h — no native 3m or 10m
+            daily_df, hourly_df, ten_min_df, three_min_df, premarket_df = await asyncio.gather(
+                asyncio.to_thread(_fetch_daily, ticker),
+                asyncio.to_thread(_fetch_intraday, ticker, "1h"),
+                asyncio.to_thread(_fetch_intraday, ticker, "15m"),
+                asyncio.to_thread(_fetch_intraday, ticker, "5m"),
+                asyncio.to_thread(_fetch_premarket, ticker),
+            )
 
-        # Build the detailed brief
-        bias = structure_result.get("structural_bias", "unknown").replace("_", " ").title()
-        ribbon_state = ribbon_result.get("ribbon_state", "unknown").title()
-        phase_state = phase_result.get("phase", "unknown").title()
-        conviction = mtf_result.get("conviction", "unknown").title()
-        atr_val = atr_result.get("atr", 0)
-        atr_pct = atr_result.get("atr_covered_pct", 0)
-        current = atr_result.get("current_price", 0)
-        pdc = atr_result.get("pdc", 0)
+            # Run indicators
+            atr_result = atr_levels(daily_df)
+            ribbon_1h = pivot_ribbon(hourly_df)
+            ribbon_10m = pivot_ribbon(ten_min_df)
+            ribbon_3m = pivot_ribbon(three_min_df)
+            phase_result = phase_oscillator(hourly_df)
+            structure_result = price_structure(daily_df, premarket_df)
 
-        # Bias emoji
-        bias_emoji = {"Strongly Bullish": "🟢🟢", "Bullish": "🟢", "Neutral": "⚪", "Bearish": "🔴", "Strongly Bearish": "🔴🔴"}.get(bias, "⚪")
-        phase_emoji = {"Green": "🟢", "Red": "🔴", "Compression": "🟣"}.get(phase_state, "⚪")
-        vix_emoji = "🟢" if isinstance(vix_reading, (int, float)) and vix_reading < 17 else "🟡" if isinstance(vix_reading, (int, float)) and vix_reading <= 20 else "🔴"
+            # MTF scores across timeframes
+            scores = {}
+            for tf_label, tf_df in [("5m", three_min_df), ("15m", ten_min_df), ("1h", hourly_df)]:
+                try:
+                    scores[tf_label] = mtf_score(tf_df)
+                except Exception:
+                    pass
+            mtf_result = aggregate_mtf_scores(scores) if scores else {"conviction": "N/A", "min_score": "N/A"}
 
-        # ATR levels table
-        atr_levels_text = ""
-        ct = atr_result.get("call_trigger", 0)
-        pt = atr_result.get("put_trigger", 0)
-        gg_bull = levels.get("golden_gate_bull", {}).get("price", 0)
-        gg_bear = levels.get("golden_gate_bear", {}).get("price", 0)
-        mid_bull = levels.get("mid_range_bull", {}).get("price", 0)
-        mid_bear = levels.get("mid_range_bear", {}).get("price", 0)
-        fr_bull = levels.get("full_range_bull", {}).get("price", 0)
-        fr_bear = levels.get("full_range_bear", {}).get("price", 0)
+            # Extract key values
+            current = atr_result.get("current_price", 0)
+            pdc = atr_result.get("pdc", 0)
+            atr_val = atr_result.get("atr", 0)
+            atr_pct = atr_result.get("atr_covered_pct", 0)
+            levels = atr_result.get("levels", {})
 
-        atr_levels_text = (
-            f"  `+100%  Full Range   {fr_bull:>8.2f}`\n"
-            f"  `+61.8% Mid Range    {mid_bull:>8.2f}`\n"
-            f"  `+38.2% Golden Gate  {gg_bull:>8.2f}`\n"
-            f"  `+23.6% Call Trigger {ct:>8.2f}`\n"
-            f"  ` 0.0%  PDC          {pdc:>8.2f}`  ← Zero Line\n"
-            f"  `-23.6% Put Trigger  {pt:>8.2f}`\n"
-            f"  `-38.2% Golden Gate  {gg_bear:>8.2f}`\n"
-            f"  `-61.8% Mid Range    {mid_bear:>8.2f}`\n"
-            f"  `-100%  Full Range   {fr_bear:>8.2f}`"
-        )
+            # EMA 21 values on 5m and 15m + distance from price
+            ema21_3m = ribbon_3m.get("ema21", 0)  # 5m as proxy
+            ema21_10m = ribbon_10m.get("ema21", 0)  # 15m as proxy
+            dist_3m = current - ema21_3m if ema21_3m else 0
+            dist_10m = current - ema21_10m if ema21_10m else 0
+            dist_3m_pct = (dist_3m / ema21_3m * 100) if ema21_3m else 0
+            dist_10m_pct = (dist_10m / ema21_10m * 100) if ema21_10m else 0
 
-        # Structure levels
-        pdh = structure_result.get("pdh", 0)
-        pdl = structure_result.get("pdl", 0)
-        pmh = structure_result.get("pmh")
-        pml = structure_result.get("pml")
-        structure_text = f"  `PDH  {pdh:>8.2f}`  |  `PDL  {pdl:>8.2f}`"
-        if pmh and pml:
-            structure_text += f"\n  `PMH  {pmh:>8.2f}`  |  `PML  {pml:>8.2f}`"
+            # Emojis
+            bias = structure_result.get("structural_bias", "unknown").replace("_", " ").title()
+            bias_emoji = {"Strongly Bullish": "🟢🟢", "Bullish": "🟢", "Neutral": "⚪", "Bearish": "🔴", "Strongly Bearish": "🔴🔴"}.get(bias, "⚪")
+            phase_state = phase_result.get("phase", "unknown").title()
+            phase_emoji = {"Green": "🟢", "Red": "🔴", "Compression": "🟣"}.get(phase_state, "⚪")
+            ribbon_1h_state = ribbon_1h.get("ribbon_state", "unknown").title()
+            vix_emoji = "🟢" if isinstance(vix_reading, (int, float)) and vix_reading < 17 else "🟡" if isinstance(vix_reading, (int, float)) and vix_reading <= 20 else "🔴"
+            conviction = mtf_result.get("conviction", "N/A")
+            if isinstance(conviction, str):
+                conviction = conviction.title()
 
-        text = (
-            f"{'─' * 40}\n"
-            f"☀️  *MORNING BRIEF — {ticker}*\n"
-            f"{'─' * 40}\n\n"
+            # ATR levels
+            ct = atr_result.get("call_trigger", 0)
+            pt = atr_result.get("put_trigger", 0)
+            gg_bull = levels.get("golden_gate_bull", {}).get("price", 0)
+            gg_bear = levels.get("golden_gate_bear", {}).get("price", 0)
+            mid_bull = levels.get("mid_range_bull", {}).get("price", 0)
+            mid_bear = levels.get("mid_range_bear", {}).get("price", 0)
+            fr_bull = levels.get("full_range_bull", {}).get("price", 0)
+            fr_bear = levels.get("full_range_bear", {}).get("price", 0)
 
-            f"*📊 Market Snapshot*\n"
-            f"  Price: *{current:.2f}*  |  ATR: {atr_val:.2f}  |  Room: {100 - atr_pct:.0f}% remaining\n"
-            f"  VIX: {vix_emoji} {vix_reading}\n\n"
+            # Structure
+            pdh = structure_result.get("pdh", 0)
+            pdl = structure_result.get("pdl", 0)
+            pmh = structure_result.get("pmh")
+            pml = structure_result.get("pml")
 
-            f"*🎯 Indicators*\n"
-            f"  Structural Bias:  {bias_emoji} {bias}\n"
-            f"  Ribbon (1h):      {ribbon_state}\n"
-            f"  Phase Oscillator: {phase_emoji} {phase_state}\n"
-            f"  MTF Conviction:   {conviction} (score: {mtf_result.get('min_score', 'N/A')})\n\n"
+            # Find nearest ATR level to current price
+            atr_level_map = {
+                "+100% Full Range": fr_bull,
+                "+61.8% Mid Range": mid_bull,
+                "+38.2% Golden Gate": gg_bull,
+                "+23.6% Call Trigger": ct,
+                "0% PDC": pdc,
+                "-23.6% Put Trigger": pt,
+                "-38.2% Golden Gate": gg_bear,
+                "-61.8% Mid Range": mid_bear,
+                "-100% Full Range": fr_bear,
+            }
+            nearest_name = ""
+            nearest_price = 0
+            nearest_dist = float("inf")
+            for name, lvl in atr_level_map.items():
+                if lvl and abs(current - lvl) < abs(nearest_dist):
+                    nearest_dist = current - lvl
+                    nearest_name = name
+                    nearest_price = lvl
+            nearest_pct = (nearest_dist / nearest_price * 100) if nearest_price else 0
+            nearest_text = f"  Nearest ATR Level: *{nearest_name}* ({nearest_price:.2f}) — {'above' if nearest_dist >= 0 else 'below'} by {abs(nearest_dist):.2f} ({nearest_pct:+.2f}%)"
 
-            f"*📐 ATR Levels*\n"
-            f"{atr_levels_text}\n\n"
+            # Distance emoji (close = within 0.1%, moderate = within 0.3%)
+            def dist_emoji(pct):
+                abs_pct = abs(pct)
+                if abs_pct <= 0.1:
+                    return "🎯"  # at the level
+                elif abs_pct <= 0.3:
+                    return "📍"  # close
+                return ""
 
-            f"*🏗️ Structure*\n"
-            f"{structure_text}\n\n"
+            text = (
+                f"{'─' * 40}\n"
+                f"☀️  *MORNING BRIEF — {label}*\n"
+                f"{'─' * 40}\n\n"
 
-            f"{'─' * 40}\n"
-            f"_Be patient. Follow your playbook. There's always another trade._"
-        )
+                f"*📊 Market Snapshot*\n"
+                f"  Price: *{current:.2f}*  |  ATR: {atr_val:.2f}  |  Room: {100 - atr_pct:.0f}% remaining\n"
+                f"{nearest_text}\n"
+                f"  VIX: {vix_emoji} {vix_reading}\n\n"
 
-    except Exception as e:
-        logger.error(f"Morning brief data fetch failed: {e}")
-        text = format_morning_brief({
-            "ticker": ticker,
-            "structural_bias": f"Error: {e}",
-            "vix_reading": "N/A",
-            "key_levels": "Data fetch failed",
-        })
+                f"*🎯 Indicators*\n"
+                f"  Structural Bias:  {bias_emoji} {bias}\n"
+                f"  Ribbon (1h):      {ribbon_1h_state}\n"
+                f"  Phase Oscillator: {phase_emoji} {phase_state}\n"
+                f"  MTF Conviction:   {conviction} (score: {mtf_result.get('min_score', 'N/A')})\n\n"
 
-    # Save to Supabase daily_plans
-    try:
-        from api.integrations.supabase_client import get_supabase
-        import datetime
-        sb = get_supabase()
-        sb.table("daily_plans").upsert({
-            "date": datetime.date.today().isoformat(),
-            "ticker": ticker,
-            "structural_bias": structure_result.get("structural_bias", "unknown") if 'structure_result' in dir() else None,
-            "atr_levels": atr_result if 'atr_result' in dir() else None,
-            "ribbon_state": ribbon_result.get("ribbon_state") if 'ribbon_result' in dir() else None,
-            "phase_state": phase_result.get("phase") if 'phase_result' in dir() else None,
-            "vix_reading": vix_reading if isinstance(vix_reading, (int, float)) else None,
-            "mtf_scores": mtf_result if 'mtf_result' in dir() else None,
-        }, on_conflict="date,ticker").execute()
-    except Exception as e:
-        logger.warning(f"Failed to save daily plan: {e}")
+                f"*📏 EMA 21 Proximity*\n"
+                f"  5m  EMA 21: `{ema21_3m:>8.2f}`  |  Price {'above' if dist_3m >= 0 else 'below'} by {abs(dist_3m):.2f} ({dist_3m_pct:+.2f}%) {dist_emoji(dist_3m_pct)}\n"
+                f"  15m EMA 21: `{ema21_10m:>8.2f}`  |  Price {'above' if dist_10m >= 0 else 'below'} by {abs(dist_10m):.2f} ({dist_10m_pct:+.2f}%) {dist_emoji(dist_10m_pct)}\n\n"
 
-    sent = await send_message(text)
-    return {"status": "sent" if sent else "slack_not_configured", "message": text}
+                f"*📐 ATR Levels*\n"
+                f"  `+100%  Full Range   {fr_bull:>8.2f}`\n"
+                f"  `+61.8% Mid Range    {mid_bull:>8.2f}`\n"
+                f"  `+38.2% Golden Gate  {gg_bull:>8.2f}`\n"
+                f"  `+23.6% Call Trigger {ct:>8.2f}`\n"
+                f"  ` 0.0%  PDC          {pdc:>8.2f}`  ← Zero Line\n"
+                f"  `-23.6% Put Trigger  {pt:>8.2f}`\n"
+                f"  `-38.2% Golden Gate  {gg_bear:>8.2f}`\n"
+                f"  `-61.8% Mid Range    {mid_bear:>8.2f}`\n"
+                f"  `-100%  Full Range   {fr_bear:>8.2f}`\n\n"
+
+                f"*🏗️ Structure*\n"
+                f"  `PDH  {pdh:>8.2f}`  |  `PDL  {pdl:>8.2f}`\n"
+            )
+            if pmh and pml:
+                text += f"  `PMH  {pmh:>8.2f}`  |  `PML  {pml:>8.2f}`\n"
+            text += (
+                f"\n{'─' * 40}\n"
+                f"_Be patient. Follow your playbook. There's always another trade._"
+            )
+
+            messages.append(text)
+
+            # Save to Supabase daily_plans
+            try:
+                from api.integrations.supabase_client import get_supabase
+                sb = get_supabase()
+                sb.table("daily_plans").upsert({
+                    "date": datetime.date.today().isoformat(),
+                    "ticker": label,
+                    "structural_bias": structure_result.get("structural_bias"),
+                    "atr_levels": atr_result,
+                    "ribbon_state": ribbon_1h.get("ribbon_state"),
+                    "phase_state": phase_result.get("phase"),
+                    "vix_reading": vix_reading if isinstance(vix_reading, (int, float)) else None,
+                    "mtf_scores": mtf_result,
+                    "key_levels": {
+                        "ema21_3m": ema21_3m, "ema21_10m": ema21_10m,
+                        "pdh": pdh, "pdl": pdl, "pmh": pmh, "pml": pml,
+                    },
+                }, on_conflict="date,ticker").execute()
+            except Exception as e:
+                logger.warning(f"Failed to save daily plan for {label}: {e}")
+
+        except Exception as e:
+            logger.error(f"Morning brief failed for {label}: {e}")
+            messages.append(f"☀️ *MORNING BRIEF — {label}*\n\nData fetch failed: {e}")
+
+    # Send each ticker as a separate Slack message
+    all_sent = True
+    for msg in messages:
+        sent = await send_message(msg)
+        if not sent:
+            all_sent = False
+
+    return {"status": "sent" if all_sent else "partial", "tickers": list(ticker_labels.values()), "messages": messages}
 
 
 @router.post("/orb-marker")

@@ -11,8 +11,8 @@ class TestScheduledEndpoints:
             resp = await client.post("/api/scheduled/morning-brief")
             assert resp.status_code == 200
             data = resp.json()
-            assert "message" in data
-            assert "MORNING BRIEF" in data["message"] or "Morning Brief" in data["message"]
+            assert "messages" in data
+            assert any("MORNING BRIEF" in m or "Morning Brief" in m for m in data["messages"])
 
     async def test_orb_marker(self):
         transport = ASGITransport(app=app)
