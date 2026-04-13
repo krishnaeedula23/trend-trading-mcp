@@ -1,5 +1,5 @@
 import pytest
-from api.indicators.satyland.mtf_score import mtf_score
+from api.indicators.satyland.mtf_score import _score_to_conviction, aggregate_mtf_scores, mtf_score
 
 
 class TestMTFScoreCalculation:
@@ -34,3 +34,34 @@ class TestMTFScoreCalculation:
             assert result["is_a_plus"] is True
         else:
             assert result["is_a_plus"] is False
+
+
+class TestMTFScoreAggregation:
+    def test_aggregate_all_bullish(self, trending_up_250_df):
+        scores = {
+            "3m": mtf_score(trending_up_250_df),
+            "10m": mtf_score(trending_up_250_df),
+        }
+        result = aggregate_mtf_scores(scores)
+        assert result["alignment"] == "bullish"
+        assert result["min_score"] > 0
+
+    def test_aggregate_conflict(self, trending_up_250_df, trending_down_250_df):
+        scores = {
+            "3m": mtf_score(trending_up_250_df),
+            "10m": mtf_score(trending_down_250_df),
+        }
+        result = aggregate_mtf_scores(scores)
+        assert result["alignment"] == "conflict"
+
+    def test_conviction_thresholds(self):
+        assert _score_to_conviction(15) == "maximum"
+        assert _score_to_conviction(12) == "strong"
+        assert _score_to_conviction(8) == "moderate"
+        assert _score_to_conviction(5) == "weak"
+        assert _score_to_conviction(2) == "chopzilla"
+
+    def test_aggregate_has_conviction(self, trending_up_250_df):
+        scores = {"3m": mtf_score(trending_up_250_df)}
+        result = aggregate_mtf_scores(scores)
+        assert result["conviction"] in ("maximum", "strong", "moderate", "weak", "chopzilla")

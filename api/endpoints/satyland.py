@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from api.indicators.satyland.atr_levels import atr_levels
 from api.indicators.satyland.green_flag import green_flag_checklist
+from api.indicators.satyland.mtf_score import aggregate_mtf_scores, mtf_score
 from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.satyland.pivot_ribbon import pivot_ribbon
 from api.indicators.satyland.price_structure import (
@@ -111,6 +112,14 @@ class TradePlanRequest(BaseModel):
 
 class PremarketRequest(BaseModel):
     ticker: str = Field(..., description="Ticker symbol, e.g. SPY or ^VIX")
+
+
+class MTFScoreRequest(BaseModel):
+    ticker: str = Field(..., description="Ticker symbol, e.g. AAPL")
+    timeframes: list[str] = Field(
+        default=["3", "10", "60"],
+        description="List of intraday minute timeframes to score, e.g. ['3', '10', '60']",
+    )
 
 
 # Indices that truly have NO premarket data (price indices, not computed)
@@ -548,4 +557,61 @@ async def get_premarket(req: PremarketRequest):
             "low": round(float(pm["low"].min()), 4),
         },
         headers={"Cache-Control": "s-maxage=30, stale-while-revalidate=60"},
+    )
+
+
+@router.post("/mtf-score")
+async def get_mtf_score(req: MTFScoreRequest):
+    """
+    Compute MTF Score for a ticker across multiple intraday timeframes.
+
+    Each timeframe string is treated as a minute interval (e.g. "3" → 3-minute bars).
+    Scores are aggregated to produce alignment and conviction level.
+    """
+    # Map minute-string timeframes to TIMEFRAME_MAP keys
+    _MINUTE_TO_TF: dict[str, str] = {
+        "1": "1m",
+        "5": "5m",
+        "15": "15m",
+        "60": "1h",
+        "240": "4h",
+    }
+
+    async def _compute_score(tf_str: str) -> tuple[str, dict | None]:
+        tf_key = _MINUTE_TO_TF.get(tf_str)
+        # Fall back: treat raw string as a TIMEFRAME_MAP key if not in minute map
+        if tf_key is None:
+            tf_key = tf_str if tf_str in TIMEFRAME_MAP else None
+        if tf_key is None:
+            return tf_str, None
+        try:
+            df = await asyncio.to_thread(_fetch_intraday, req.ticker, tf_key)
+            return tf_str, mtf_score(df)
+        except Exception:
+            return tf_str, None
+
+    results = await asyncio.gather(*(_compute_score(tf) for tf in req.timeframes))
+    scores = {tf: data for tf, data in results if data is not None}
+
+    if not scores:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not fetch data for any requested timeframe for {req.ticker}",
+        )
+
+    try:
+        aggregated = aggregate_mtf_scores(scores)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Aggregation failed: {exc}"
+        ) from exc
+
+    return JSONResponse(
+        content={
+            "ticker": req.ticker.upper(),
+            "timeframes": req.timeframes,
+            "scores": scores,
+            "aggregated": aggregated,
+        },
+        headers={"Cache-Control": "s-maxage=60, stale-while-revalidate=300"},
     )

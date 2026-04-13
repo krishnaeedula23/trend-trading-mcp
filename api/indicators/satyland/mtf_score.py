@@ -45,3 +45,45 @@ def mtf_score(df: pd.DataFrame) -> dict:
         "in_compression": po["in_compression"],
         "is_a_plus": abs(score) == 15 and po["in_compression"],
     }
+
+
+def _score_to_conviction(abs_score: int) -> str:
+    if abs_score >= 13:
+        return "maximum"
+    elif abs_score >= 10:
+        return "strong"
+    elif abs_score >= 7:
+        return "moderate"
+    elif abs_score >= 4:
+        return "weak"
+    return "chopzilla"
+
+
+def aggregate_mtf_scores(scores: dict[str, dict]) -> dict:
+    """Aggregate MTF scores across timeframes with alignment analysis."""
+    result = {}
+    score_values = []
+
+    for tf, data in scores.items():
+        result[tf] = {
+            "score": data["score"],
+            "po": data["po_value"],
+            "compression": data["in_compression"],
+        }
+        score_values.append(data["score"])
+
+    all_positive = all(s > 0 for s in score_values)
+    all_negative = all(s < 0 for s in score_values)
+
+    if all_positive:
+        result["alignment"] = "bullish"
+        result["min_score"] = min(score_values)
+    elif all_negative:
+        result["alignment"] = "bearish"
+        result["min_score"] = min(abs(s) for s in score_values)
+    else:
+        result["alignment"] = "conflict"
+        result["min_score"] = min(abs(s) for s in score_values)
+
+    result["conviction"] = _score_to_conviction(result["min_score"])
+    return result
