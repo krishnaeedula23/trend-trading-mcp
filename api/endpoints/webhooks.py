@@ -140,12 +140,13 @@ async def tradingview_webhook(
         logger.error(f"Grading failed: {e}")
         grade_result = {"grade": "error", "reasoning": str(e)}
 
-    # 4. Post to Slack
+    # 4. Post to Slack — route to ticker-specific channel
     try:
-        from api.integrations.slack import format_setup_alert, send_message
+        from api.integrations.slack import format_setup_alert, send_message, get_ticker_channel
         if grade_result and grade_result.get("grade") != "error":
             text = format_setup_alert(grade_result, payload.ticker, payload.timeframe, payload.price)
-            await send_message(text)
+            ticker_channel = get_ticker_channel(payload.ticker)
+            await send_message(text, channel_type=ticker_channel)
     except Exception as e:
         logger.warning(f"Slack post failed: {e}")
 

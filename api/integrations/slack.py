@@ -22,18 +22,71 @@ def _get_slack_client():
     return WebClient(token=token)
 
 
-def _get_channel() -> str:
-    return os.environ.get("SLACK_CHANNEL_ID", "")
+def _get_channel(channel_type: str = "default") -> str:
+    """Get Slack channel ID by type.
+
+    Channel routing:
+      default     → SLACK_CHANNEL_ID (morning brief, journal, scheduled alerts)
+      alerts-spy  → SLACK_CHANNEL_ALERTS_SPY (SPY setup alerts)
+      alerts-spx  → SLACK_CHANNEL_ALERTS_SPX (SPX setup alerts)
+      alerts-watchlist → SLACK_CHANNEL_ALERTS_WATCHLIST (other tickers)
+      day-trades  → SLACK_CHANNEL_DAY_TRADES (day trading)
+      swing-trades → SLACK_CHANNEL_SWING_TRADES (swing trading)
+      position-trades → SLACK_CHANNEL_POSITION_TRADES (position trading)
+
+    Falls back to SLACK_CHANNEL_ID if the specific channel isn't configured.
+    """
+    env_map = {
+        "default": "SLACK_CHANNEL_ID",
+        "alerts-spy": "SLACK_CHANNEL_ALERTS_SPY",
+        "alerts-spx": "SLACK_CHANNEL_ALERTS_SPX",
+        "alerts-watchlist": "SLACK_CHANNEL_ALERTS_WATCHLIST",
+        "day-trades": "SLACK_CHANNEL_DAY_TRADES",
+        "swing-trades": "SLACK_CHANNEL_SWING_TRADES",
+        "position-trades": "SLACK_CHANNEL_POSITION_TRADES",
+    }
+    env_key = env_map.get(channel_type, "SLACK_CHANNEL_ID")
+    channel = os.environ.get(env_key, "")
+    # Fall back to default channel if specific one isn't configured
+    if not channel and channel_type != "default":
+        channel = os.environ.get("SLACK_CHANNEL_ID", "")
+    return channel
 
 
-async def send_message(text: str, blocks: list[dict] | None = None) -> bool:
-    """Send a message to the configured Slack channel. Returns True on success."""
+def get_ticker_channel(ticker: str) -> str:
+    """Route a ticker to the appropriate Slack channel."""
+    ticker_upper = ticker.upper().replace("^", "")
+    if ticker_upper in ("SPY", "ES"):
+        return "alerts-spy"
+    elif ticker_upper in ("GSPC", "SPX"):
+        return "alerts-spx"
+    else:
+        return "alerts-watchlist"
+
+
+def get_trading_mode_channel(mode: str = "day") -> str:
+    """Route by trading mode (day/swing/position)."""
+    return {
+        "day": "day-trades",
+        "swing": "swing-trades",
+        "position": "position-trades",
+    }.get(mode, "day-trades")
+
+
+async def send_message(text: str, blocks: list[dict] | None = None, channel_type: str = "default") -> bool:
+    """Send a message to a Slack channel. Returns True on success.
+
+    Args:
+        text: Message text (Slack mrkdwn format)
+        blocks: Optional Slack Block Kit blocks
+        channel_type: Channel routing key (default, alerts-spy, alerts-spx, etc.)
+    """
     import asyncio
 
     client = _get_slack_client()
-    channel = _get_channel()
+    channel = _get_channel(channel_type)
     if not client or not channel:
-        logger.info("Slack not configured, skipping message")
+        logger.info(f"Slack not configured for {channel_type}, skipping message")
         return False
 
     try:
@@ -45,7 +98,7 @@ async def send_message(text: str, blocks: list[dict] | None = None) -> bool:
         )
         return True
     except Exception as e:
-        logger.error(f"Slack send failed: {e}")
+        logger.error(f"Slack send failed ({channel_type}): {e}")
         return False
 
 
