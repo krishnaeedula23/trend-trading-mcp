@@ -47,7 +47,7 @@ class TestTradingViewWebhook:
                 )
                 assert resp.status_code == 200
                 data = resp.json()
-                assert data["status"] == "received"
+                assert data["status"] == "processed"
                 assert data["direction"] == "bullish"
 
     async def test_invalid_setup_returns_400(self):
