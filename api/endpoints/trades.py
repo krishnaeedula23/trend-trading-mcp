@@ -168,7 +168,7 @@ async def create_from_alert(alert_id: str, trade: TradeCreate):
     try:
         from api.integrations.supabase_client import get_supabase
         sb = get_supabase()
-        alert = sb.table("alerts").select("*").eq("id", alert_id).execute()
+        alert = sb.table("trading_alerts").select("*").eq("id", alert_id).execute()
         if alert.data:
             alert_data = alert.data[0]
             # Pre-fill from alert details
@@ -186,7 +186,7 @@ async def create_from_alert(alert_id: str, trade: TradeCreate):
         try:
             from api.integrations.supabase_client import get_supabase
             sb = get_supabase()
-            sb.table("alerts").update({
+            sb.table("trading_alerts").update({
                 "traded": True,
                 "trade_id": result["trade"]["id"],
             }).eq("id", alert_id).execute()

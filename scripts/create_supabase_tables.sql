@@ -131,11 +131,11 @@ CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries (date DES
 
 
 -- =============================================================================
--- Table 4: alerts
+-- Table 4: trading_alerts (named to avoid conflict with existing "alerts" table)
 -- Stores inbound alerts (webhook from TradingView or scheduled scan).
 -- Linked back to a trade once the alert is acted on.
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS alerts (
+CREATE TABLE IF NOT EXISTS trading_alerts (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     date            DATE        NOT NULL,
     ticker          TEXT        NOT NULL,
@@ -152,22 +152,22 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_alerts_date       ON alerts (date DESC);
-CREATE INDEX IF NOT EXISTS idx_alerts_ticker     ON alerts (ticker);
-CREATE INDEX IF NOT EXISTS idx_alerts_setup_type ON alerts (setup_type);
+CREATE INDEX IF NOT EXISTS idx_trading_alerts_date       ON trading_alerts (date DESC);
+CREATE INDEX IF NOT EXISTS idx_trading_alerts_ticker     ON trading_alerts (ticker);
+CREATE INDEX IF NOT EXISTS idx_trading_alerts_setup_type ON trading_alerts (setup_type);
 
-CREATE OR REPLACE TRIGGER trg_alerts_updated_at
-    BEFORE UPDATE ON alerts
+CREATE OR REPLACE TRIGGER trg_trading_alerts_updated_at
+    BEFORE UPDATE ON trading_alerts
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 
 -- ---------------------------------------------------------------------------
--- Deferred FK: trades.alert_id → alerts.id
--- Added here because alerts did not exist when trades was created.
+-- Deferred FK: trades.alert_id → trading_alerts.id
+-- Added here because trading_alerts did not exist when trades was created.
 -- ---------------------------------------------------------------------------
 ALTER TABLE trades
     ADD CONSTRAINT fk_trades_alert
-    FOREIGN KEY (alert_id) REFERENCES alerts(id);
+    FOREIGN KEY (alert_id) REFERENCES trading_alerts(id);
 
 
 -- =============================================================================

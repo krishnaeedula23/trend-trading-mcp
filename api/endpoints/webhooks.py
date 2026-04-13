@@ -67,7 +67,7 @@ async def tradingview_webhook(
     try:
         from api.integrations.supabase_client import get_supabase
         sb = get_supabase()
-        alert_record = sb.table("alerts").insert({
+        alert_record = sb.table("trading_alerts").insert({
             "date": datetime.date.today().isoformat(),
             "ticker": payload.ticker,
             "setup_type": payload.setup,
@@ -138,7 +138,7 @@ async def tradingview_webhook(
         try:
             from api.integrations.supabase_client import get_supabase
             sb = get_supabase()
-            sb.table("alerts").update({
+            sb.table("trading_alerts").update({
                 "grade": grade_result.get("grade", "error"),
                 "details": grade_result,
             }).eq("id", alert_id).execute()
