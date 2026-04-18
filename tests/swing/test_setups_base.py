@@ -1,6 +1,5 @@
 """Tests for api.indicators.swing.setups.base."""
 
-import math
 import pytest
 
 from api.indicators.swing.setups import (
