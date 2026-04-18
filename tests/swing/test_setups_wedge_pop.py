@@ -84,11 +84,13 @@ def test_low_volume_returns_none():
 # ---------------------------------------------------------------------------
 
 def test_no_descending_structure_returns_none():
-    """Monotonically rising closes: no lower-high pair; slope also fails."""
-    closes = [90.0 + i for i in range(36)]
-    bars = synth_bars(closes=closes)
+    """Take the happy-path base and override only window highs to be monotonically
+    rising, so no lower-high pair exists in the last 15 bars. All other conditions
+    still hold — isolates the descending-structure guard."""
+    bars = _happy_bars(vol_ratio=1.3)
     qqq  = _qqq_flat(len(bars))
-    hit  = detect(bars, qqq, _ctx())
+    bars.loc[bars.index[20:35], "high"] = [101.0 + i for i in range(15)]  # monotonic up
+    hit = detect(bars, qqq, _ctx())
     assert hit is None
 
 
