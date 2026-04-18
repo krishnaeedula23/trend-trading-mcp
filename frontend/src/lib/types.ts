@@ -519,3 +519,39 @@ export interface SectorStocksResponse {
   sector: string
   stocks: DrillDownTicker[]
 }
+
+// ---------------------------------------------------------------------------
+// Swing Trading — Universe (Plan 1)
+// ---------------------------------------------------------------------------
+
+export type SwingUniverseSource = "deepvue-csv" | "manual" | "backend-generated"
+
+export interface SwingUniverseTicker {
+  ticker: string
+  source: SwingUniverseSource
+  batch_id: string
+  added_at: string
+  extras: Record<string, unknown> | null
+}
+
+export interface SwingUniverseListResponse {
+  tickers: SwingUniverseTicker[]
+  source_summary: Record<SwingUniverseSource, number>
+  active_count: number
+  latest_batch_at: string | null
+}
+
+export interface SwingUniverseUploadResponse {
+  batch_id: string
+  mode: "replace" | "add"
+  tickers_added: number
+  tickers_removed: number
+  total_active: number
+}
+
+export interface SwingUniverseHistoryEntry {
+  batch_id: string
+  source: string
+  uploaded_at: string
+  ticker_count: number
+}

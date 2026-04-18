@@ -34,6 +34,7 @@ const navItems = [
   { label: "Analyze", href: "/analyze", icon: Search },
   { label: "Scan", href: "/scan", icon: Radar },
   { label: "Screener", href: "/screener", icon: TrendingUp },
+  { label: "Swing Ideas", href: "/swing-ideas", icon: Activity, badge: "New" },
   { label: "Market Monitor", href: "/market-monitor", icon: Activity },
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
   { label: "Watchlists", href: "/watchlists", icon: List },
