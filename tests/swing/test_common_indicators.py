@@ -108,3 +108,78 @@ def test_weekly_resample_high_is_max():
     })
     weekly = weekly_resample(bars)
     assert weekly["high"].iloc[0] == 104.0
+
+
+# ── rs_vs_benchmark ───────────────────────────────────────────────────────────
+
+from api.indicators.common.relative_strength import rs_vs_benchmark
+
+
+def test_rs_ticker_outperforms():
+    # Ticker doubles from 100 → 200 over 20 days; benchmark flat at 100.
+    n = 40
+    dates = pd.date_range("2026-01-02", periods=n, freq="B")
+    ticker = pd.DataFrame({"close": [100.0 + i * (100.0 / (n - 1)) for i in range(n)]})
+    bench = pd.DataFrame({"close": [100.0] * n})
+    rs = rs_vs_benchmark(ticker, bench, lookback_days=20)
+    assert float(rs.iloc[-1]) > 0
+
+
+def test_rs_both_flat():
+    n = 40
+    ticker = pd.DataFrame({"close": [100.0] * n})
+    bench = pd.DataFrame({"close": [100.0] * n})
+    rs = rs_vs_benchmark(ticker, bench, lookback_days=20)
+    assert abs(float(rs.iloc[-1])) < 1e-9
+
+
+def test_rs_length_matches_shorter_input():
+    ticker = pd.DataFrame({"close": [100.0] * 50})
+    bench = pd.DataFrame({"close": [100.0] * 35})
+    rs = rs_vs_benchmark(ticker, bench, lookback_days=10)
+    assert len(rs) == 35
+
+
+# ── phase_oscillator_daily ────────────────────────────────────────────────────
+
+from api.indicators.common.phase_oscillator import phase_oscillator_daily
+
+
+def _trending_bars(n: int, start: float, end: float) -> pd.DataFrame:
+    closes = [start + (end - start) * i / (n - 1) for i in range(n)]
+    return pd.DataFrame({
+        "close": closes,
+        "open": closes,
+        "high": [c + 0.5 for c in closes],
+        "low": [c - 0.5 for c in closes],
+        "volume": 1_000_000,
+    })
+
+
+def test_phase_osc_positive_in_uptrend():
+    bars = _trending_bars(80, start=50, end=150)
+    osc = phase_oscillator_daily(bars)
+    assert float(osc.iloc[-1]) > 0
+
+
+def test_phase_osc_negative_in_downtrend():
+    bars = _trending_bars(80, start=150, end=50)
+    osc = phase_oscillator_daily(bars)
+    assert float(osc.iloc[-1]) < 0
+
+
+def test_phase_osc_modest_in_range_bound():
+    import math
+    n = 80
+    # Sinusoidal: oscillates around 100 with amplitude 5 over ~4 full cycles
+    closes = [100.0 + 5.0 * math.sin(2 * math.pi * i / 20) for i in range(n)]
+    bars = pd.DataFrame({
+        "close": closes,
+        "open": closes,
+        "high": [c + 0.2 for c in closes],
+        "low": [c - 0.2 for c in closes],
+        "volume": 1_000_000,
+    })
+    osc = phase_oscillator_daily(bars)
+    # In a range-bound regime the oscillator should stay well below 50
+    assert abs(float(osc.iloc[-1])) < 50
