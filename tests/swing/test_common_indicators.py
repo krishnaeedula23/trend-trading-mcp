@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 from api.indicators.common.moving_averages import ema, sma, weekly_resample
 from api.indicators.common.atr import atr
