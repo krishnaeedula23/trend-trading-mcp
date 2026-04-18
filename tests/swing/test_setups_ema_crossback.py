@@ -91,21 +91,18 @@ def test_no_prior_wedge_pop_returns_none():
 
 
 # ---------------------------------------------------------------------------
-# Test 3: Close below respected EMA → None
-#
-# Strategy: force close well below EMA (90.0 vs EMA ~100).
-# dist = |90 - 100| = 10; half_atr ~1.0 → fails cond 2 (too far away).
-# Also confirms cond 3 would block it even if cond 2 were relaxed.
+# Test 3: Low below respected EMA → None (isolates cond 3).
+# Keeps close within 0.5*ATR of EMA (cond 2 passes) and drops low below EMA.
 # ---------------------------------------------------------------------------
 
-def test_close_below_respected_ema_returns_none():
+def test_low_below_respected_ema_returns_none():
     bars = _happy_bars(vol_ratio=0.6)
     qqq  = _qqq(len(bars))
     ctx  = _ctx_with_prior(bars)
 
-    # Push close well below EMA so dist > 0.5*ATR — cond 2 fails
-    bars.loc[bars.index[-1], "close"] = 90.0
-    bars.loc[bars.index[-1], "low"]   = 89.0   # also below EMA
+    # EMA10 converges to ~100.148; close=100.3 stays within 0.5*ATR.
+    # Drop low to 99.5 — below EMA10, so cond 3 (low > respected_ema) fails.
+    bars.loc[bars.index[-1], "low"] = 99.5
 
     hit = detect(bars, qqq, ctx)
     assert hit is None
