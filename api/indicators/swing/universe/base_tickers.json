@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "updated": "2026-04-18",
+  "sources": ["Russell 3000", "Nasdaq Composite"],
+  "tickers": [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "CRWD", "SMCI",
+    "PLTR", "NET", "DDOG", "SNOW", "MDB", "ZS", "OKTA", "PANW", "FTNT", "S",
+    "LLY", "UNH", "ABBV", "MRK", "TMO", "NVO", "VRTX", "ISRG", "DHR", "GILD",
+    "JPM", "V", "MA", "BAC", "WFC", "C", "GS", "MS", "AXP", "SCHW",
+    "COST", "WMT", "HD", "LOW", "TGT", "NKE", "SBUX", "MCD", "DIS", "NFLX",
+    "XOM", "CVX", "SLB", "EOG", "OXY", "PSX", "VLO", "MRO", "COP", "PXD",
+    "AMD", "INTC", "QCOM", "MU", "AMAT", "LRCX", "KLAC", "ARM", "MRVL", "ON",
+    "TSM", "ASML", "BABA", "JD", "PDD", "MELI", "SHOP", "SE", "CRWV", "APP",
+    "UBER", "LYFT", "DASH", "ABNB", "BKNG", "RBLX", "DKNG", "PINS", "SNAP", "RDDT",
+    "CAT", "DE", "GE", "BA", "LMT", "RTX", "NOC", "HON", "MMM", "EMR",
+    "PYPL", "SQ", "COIN", "HOOD", "MSTR", "AFRM", "SOFI", "UPST", "LMND",
+    "ENPH", "FSLR", "SEDG", "RUN", "BE", "PLUG", "NEE", "DUK", "SO", "AEP",
+    "NBIS", "IOT", "SFM", "SG", "SBLK", "ALAB", "CELH", "HIMS", "ASTS", "RKLB",
+    "JOBY", "ACHR", "BLDE", "CLSK", "MARA", "RIOT", "CIFR", "BITF", "HUT", "WULF",
+    "DUOL", "KC", "GRAB", "CORZ", "TEM", "APLD", "SMTC", "CRDO"
+  ]
+}
