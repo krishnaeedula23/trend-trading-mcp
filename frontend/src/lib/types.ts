@@ -555,3 +555,32 @@ export interface SwingUniverseHistoryEntry {
   uploaded_at: string
   ticker_count: number
 }
+
+// ---------------------------------------------------------------------------
+// Swing Trading — Ideas (Plan 2)
+// ---------------------------------------------------------------------------
+
+export interface SwingIdea {
+  id: string
+  ticker: string
+  cycle_stage: string
+  setup_kell: string
+  confluence_score: number
+  entry_zone_low: number | null
+  entry_zone_high: number | null
+  stop_price: number
+  first_target: number | null
+  second_target: number | null
+  status: "active" | "watching" | "exited" | "invalidated"
+  detected_at: string
+  base_thesis: string | null
+  thesis_status: "pending" | "generated" | "refined"
+  market_health: Record<string, unknown> | null
+  risk_flags: Record<string, unknown>
+  detection_evidence: Record<string, unknown> | null
+}
+
+export interface SwingIdeaListResponse {
+  ideas: SwingIdea[]
+  total: number
+}
