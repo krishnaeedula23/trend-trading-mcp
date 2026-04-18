@@ -3,24 +3,21 @@
 import { useEffect, useState } from "react"
 import type { SwingIdeaListResponse } from "@/lib/types"
 
-type HealthRegime = "bull" | "bear" | "neutral" | null
-
-function regimeIcon(regime: string | null): string {
-  if (!regime) return "⚪"
-  const r = regime.toLowerCase()
-  if (r.includes("bull") || r === "green") return "🟢"
-  if (r.includes("bear") || r === "red") return "🔴"
-  return "🟡"
+function stageIcon(stage: string | null, greenLight: boolean | null): string {
+  if (greenLight === true) return "🟢"
+  if (greenLight === false && stage === "bear") return "🔴"
+  if (greenLight === false) return "🟡"
+  return "⚪"
 }
 
-function regimeLabel(regime: string | null): string {
-  if (!regime) return "—"
-  return regime.charAt(0).toUpperCase() + regime.slice(1).toLowerCase()
+function stageLabel(stage: string | null): string {
+  if (!stage) return "—"
+  return stage.charAt(0).toUpperCase() + stage.slice(1).toLowerCase()
 }
 
 export function MarketHealthBar() {
-  const [regime, setRegime] = useState<string | null>(null)
-  const [breadth, setBreadth] = useState<string | null>(null)
+  const [stage, setStage] = useState<string | null>(null)
+  const [greenLight, setGreenLight] = useState<boolean | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -32,8 +29,8 @@ export function MarketHealthBar() {
         const first = data.ideas?.[0]
         if (first?.market_health) {
           const mh = first.market_health as Record<string, unknown>
-          setRegime(typeof mh.regime === "string" ? mh.regime : null)
-          setBreadth(typeof mh.breadth === "string" ? mh.breadth : null)
+          setStage(typeof mh.index_cycle_stage === "string" ? mh.index_cycle_stage : null)
+          setGreenLight(typeof mh.green_light === "boolean" ? mh.green_light : null)
         }
       } catch {
         // silently ignore — bar just shows no data
@@ -49,15 +46,15 @@ export function MarketHealthBar() {
     <div className="flex items-center gap-3 rounded border border-border/30 bg-card/30 px-3 py-2 text-xs">
       <span className="text-muted-foreground font-medium">Market Health</span>
       <span>
-        {regimeIcon(regime)} Regime:{" "}
-        <span className="font-medium">{regimeLabel(regime)}</span>
+        {stageIcon(stage, greenLight)} QQQ:{" "}
+        <span className="font-medium">{stageLabel(stage)}</span>
       </span>
-      {breadth && (
+      {greenLight !== null && (
         <span className="text-muted-foreground">
-          Breadth: <span className="font-medium text-foreground">{breadth}</span>
+          {greenLight ? "Green light" : "No green light"}
         </span>
       )}
-      {!regime && !breadth && (
+      {stage === null && greenLight === null && (
         <span className="text-muted-foreground">No data</span>
       )}
     </div>
