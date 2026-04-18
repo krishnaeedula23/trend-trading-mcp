@@ -46,3 +46,41 @@ class UniverseHistoryEntry(BaseModel):
 
 class UniverseHistoryResponse(BaseModel):
     batches: list[UniverseHistoryEntry]
+
+
+class SwingIdea(BaseModel):
+    id: UUID
+    ticker: str
+    cycle_stage: str
+    setup_kell: str
+    confluence_score: int
+    entry_zone_low: float | None = None
+    entry_zone_high: float | None = None
+    stop_price: float
+    first_target: float | None = None
+    second_target: float | None = None
+    status: str                           # 'active' | 'watching' | 'exited' | 'invalidated'
+    detected_at: datetime
+    base_thesis: str | None = None
+    thesis_status: str                    # 'pending' | 'generated' | 'refined'
+    market_health: dict[str, Any] | None = None
+    risk_flags: dict[str, Any]
+    detection_evidence: dict[str, Any] | None = None
+
+
+class SwingIdeaListResponse(BaseModel):
+    ideas: list[SwingIdea]
+    total: int
+
+
+class SetupHitResponse(BaseModel):
+    """Compact detector output for ad-hoc detection — used in Plan 3."""
+    ticker: str
+    setup_kell: str
+    cycle_stage: str
+    entry_zone: tuple[float, float]
+    stop_price: float
+    first_target: float | None = None
+    second_target: float | None = None
+    detection_evidence: dict[str, Any]
+    raw_score: int

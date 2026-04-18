@@ -5,7 +5,7 @@ import csv
 import io
 import os
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from supabase import Client, create_client
@@ -15,6 +15,8 @@ from api.indicators.swing.universe.resolver import (
     save_universe_batch,
 )
 from api.schemas.swing import (
+    SwingIdea,
+    SwingIdeaListResponse,
     UniverseAddSingleRequest,
     UniverseHistoryEntry,
     UniverseHistoryResponse,
@@ -142,6 +144,29 @@ async def upload_csv(
         tickers_removed=removed_before,
         total_active=active_count,
     )
+
+
+@router.get("/ideas", response_model=SwingIdeaListResponse)
+def list_ideas(status: str | None = None, limit: int = 50):
+    sb = _get_supabase()
+    q = sb.table("swing_ideas").select("*")
+    if status:
+        q = q.eq("status", status)
+    # Order by confluence desc, detected_at desc — FakeSupabaseClient supports .order(col, desc)
+    rows = q.order("confluence_score", desc=True).limit(limit).execute().data or []
+    # Secondary sort by detected_at in Python (fake client only supports one .order())
+    rows.sort(key=lambda r: (r.get("confluence_score", 0), r.get("detected_at") or ""), reverse=True)
+    ideas = [SwingIdea(**r) for r in rows]
+    return SwingIdeaListResponse(ideas=ideas, total=len(ideas))
+
+
+@router.get("/ideas/{idea_id}", response_model=SwingIdea)
+def get_idea(idea_id: UUID):
+    sb = _get_supabase()
+    rows = sb.table("swing_ideas").select("*").eq("id", str(idea_id)).execute().data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"Idea {idea_id} not found")
+    return SwingIdea(**rows[0])
 
 
 @router.delete("/universe/{ticker}")
