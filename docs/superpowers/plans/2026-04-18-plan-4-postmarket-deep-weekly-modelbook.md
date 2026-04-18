@@ -14,6 +14,7 @@
 - Plan 1: [docs/superpowers/plans/2026-04-18-plan-1-foundation-universe.md](./2026-04-18-plan-1-foundation-universe.md) — conventions (`_get_supabase()`, `FakeSupabaseClient`, migration 016, `/swing-ideas` shell).
 - Plan 2: [docs/superpowers/plans/2026-04-18-plan-2-detection-pipeline.md](./2026-04-18-plan-2-detection-pipeline.md) — detectors, `daily-dispatcher`, common indicator helpers under `api/indicators/common/`.
 - Plan 3: [docs/superpowers/plans/2026-04-18-plan-3-claude-analysis-layer.md](./2026-04-18-plan-3-claude-analysis-layer.md) — bearer-token auth, thesis/events endpoints, idea detail shell, `/swing-analyze-pending` pattern. **If Plan 3 is not yet merged at execution time, assume it delivers: `POST /api/swing/ideas/<id>/thesis`, `POST /api/swing/ideas/<id>/events`, auth header `Authorization: Bearer $SWING_API_TOKEN`, skill-template conventions in `.claude/skills/`.**
+- `tradingview-mcp`: https://github.com/tradesdontlie/tradingview-mcp — Node.js MCP server controlling TradingView Desktop via Chrome DevTools Protocol. Requires TradingView Desktop app with active subscription + debug port 9222. Setup: Task 0 + `docs/swing/tradingview-mcp-setup.md`.
 
 ---
 
@@ -105,6 +106,44 @@
 10. **Slack routing**: post-market + weekend-refresh digests route to `#swing-alerts` via existing multi-channel router (same channel Plan 2 uses for pre-market).
 11. **Time zones**: all cron/dispatcher logic uses UTC. The hour-branch in `daily-dispatcher` is `hour == 21` for post-market.
 12. **Chart table FK rule**: from Plan 1 migration, `swing_charts` has a CHECK constraint `num_nonnulls(idea_id, event_id, model_book_id) = 1`. Endpoints must enforce this before INSERT (return 400 on violation).
+
+---
+
+## Task 0: Install + verify tradingview-mcp
+
+**Prerequisite for Tasks 22+ (chart capture, alert creation). Complete this before implementing any skill that uses `tv_*` tools.**
+
+**Files:**
+- Create: `~/.claude/.mcp.json` entry (or modify existing)
+- New: `docs/swing/tradingview-mcp-setup.md` — short setup guide for the user
+
+- [ ] **Step 1: Clone tradingview-mcp to a known location**
+  ```bash
+  cd ~
+  git clone https://github.com/tradesdontlie/tradingview-mcp.git
+  cd tradingview-mcp && npm install
+  ```
+
+- [ ] **Step 2: Launch TradingView Desktop with debug port**
+  Use the provided helper script: `~/tradingview-mcp/scripts/launch_tv_debug_mac.sh` (or linux/win equivalent).
+
+- [ ] **Step 3: Add MCP server entry to Claude Code config**
+  Edit `~/.claude/.mcp.json` — add under `mcpServers`:
+  ```json
+  "tradingview": { "command": "node", "args": ["/Users/<you>/tradingview-mcp/src/server.js"] }
+  ```
+
+- [ ] **Step 4: Verify in Claude Code session**
+  Open a Claude Code window in this repo and run: `/mcp list` then ask Claude to call `tv_health_check`. Should return OK with TradingView version.
+
+- [ ] **Step 5: Pin TradingView Desktop version**
+  The tradingview-mcp uses undocumented Electron APIs. Note the current TV Desktop version in `docs/swing/tradingview-mcp-setup.md` so we can pin/reinstall if TV updates break compatibility.
+
+- [ ] **Step 6: Commit setup doc**
+  ```bash
+  git add docs/swing/tradingview-mcp-setup.md
+  git commit -m "docs(swing): add tradingview-mcp setup guide"
+  ```
 
 ---
 
@@ -2868,40 +2907,42 @@ git commit -m "feat(swing): add Weekly tab"
 
 This is a **markdown template** — it's a skill, not code. It's read by Claude Code and the scheduled-tasks MCP.
 
+**Implementation split:** charts + Saty indicator reads come from **tradingview-mcp** (`tv_*` tools). Deepvue is used **only for the fundamentals data panel** (Deepvue has data that TV doesn't expose). This avoids fragile DOM scraping for chart captures.
+
 - [ ] **Step 1: Write skill**
 
 ```markdown
 # .claude/skills/swing-deep-analyze.md
 ---
-description: Deep swing analysis — Claude-in-Chrome on Deepvue for top-10 active ideas. Scheduled 2:30pm PT weekdays via scheduled-tasks MCP.
+description: Deep swing analysis — tradingview-mcp for charts + indicators, Claude-in-Chrome on Deepvue for fundamentals. Top-10 active ideas. Scheduled 2:30pm PT weekdays via scheduled-tasks MCP.
 trigger_phrases:
   - /swing-deep-analyze
   - deep analyze swing ideas
 required_mcps:
+  - tradingview   # tv_* tools — tradingview-mcp
   - Claude-in-Chrome
-  - computer-use   # for app-foregrounding precheck
 ---
 
 # /swing-deep-analyze
 
 ## Goal
-For each of the top-10 active swing ideas (by confluence_score, excluding ideas whose deep_thesis_at < 24h old), capture daily/weekly/60m charts from Deepvue, scrape the data panel, and POST an updated snapshot with `claude_analysis`, chart URLs, and `deepvue_panel` to Railway.
+For each of the top-10 active swing ideas (by confluence_score, excluding ideas whose deep_thesis_at < 24h old), capture charts and indicator reads from TradingView Desktop via tradingview-mcp, scrape the fundamentals panel from Deepvue via Claude-in-Chrome, and POST an updated snapshot with `claude_analysis`, chart URLs, `tv_indicators`, and `deepvue_panel` to Railway.
 
-## Preflight (abort if any fails)
+## Preflight (abort + Slack warn on any failure — check in order)
 
-1. Screenshot the desktop. Is Chrome running and frontmost (or background)? If not:
-   - Slack `#swing-alerts`: "🚫 Deep analyze aborted: Chrome not running. Please open Chrome → Deepvue → login, then run `/swing-deep-analyze` manually."
+1. **tradingview-mcp health**: call `tv_health_check`. If it does not return OK:
+   - Post Slack `#swing-alerts`: "⚠️ /swing-deep-analyze aborted: tradingview-mcp not reachable. Is TradingView Desktop running with --remote-debugging-port=9222? See docs/swing/tradingview-mcp-setup.md."
    - Exit.
 
-2. Use `Claude-in-Chrome.tabs_context_mcp` to list tabs. Is there a tab with URL matching `deepvue.com`? If not:
-   - Slack: "🚫 Deep analyze aborted: Deepvue tab not open."
+2. **Deepvue tab check**: use `Claude-in-Chrome.tabs_context_mcp` to list tabs. Is there a tab with URL matching `deepvue.com`? If not:
+   - Slack: "⚠️ /swing-deep-analyze aborted: Deepvue tab not open. Please open Chrome → Deepvue → login."
    - Exit.
 
-3. `Claude-in-Chrome.get_page_text` on the Deepvue tab. Search for a logged-in-only marker (e.g., "Logout" link or user avatar text). If missing, assume logged out:
-   - Slack: "🚫 Deep analyze aborted: not logged into Deepvue."
+3. **Deepvue login check**: `Claude-in-Chrome.get_page_text` on the Deepvue tab. Search for a logged-in-only marker (e.g., "Logout" link or user avatar). If missing:
+   - Slack: "⚠️ /swing-deep-analyze aborted: not logged into Deepvue."
    - Exit.
 
-4. If the Claude-in-Chrome extension is deferred-loaded, request schemas first via ToolSearch (`query: "Claude-in-Chrome", max_results: 30`).
+4. If tradingview-mcp or Claude-in-Chrome tools are deferred-loaded, fetch schemas first via ToolSearch before proceeding.
 
 ## Load top-10 ideas
 
@@ -2913,17 +2954,42 @@ Filter client-side to ideas where `deep_thesis_at` is null or older than 24h. Ta
 
 ## For each ticker (serial; sleep 10s between)
 
-1. Navigate Deepvue to the ticker chart: `https://deepvue.com/charts/<TICKER>` (exact URL to be confirmed on first run).
-2. Set timeframe = Daily. Wait 2s for render. Screenshot via Claude-in-Chrome. Upload to Vercel Blob via `POST /api/swing/blob/upload-token` flow (use the fetch/blob client pattern). Capture URL.
-3. Set timeframe = Weekly. Screenshot + upload → capture URL.
-4. Set timeframe = 60min. Screenshot + upload → capture URL.
-5. Use `get_page_text` on the data panel sidebar. Parse into a dict (key metrics — rev growth, EPS, float, RS, etc.). If parse fails, store raw text.
-6. `GET /api/swing/ideas/<id>/snapshots?limit=5` — pull recent history.
-7. Claude analyzes: given thesis + 3 charts + data panel + recent snapshots, write a 3-paragraph analysis. Sections:
-   - What the chart is showing vs last snapshot (daily action, any cycle-stage inference)
-   - What the data panel adds (fundamentals/theme strength)
-   - Next action: wait / add / trim / exit — with reasoning.
-8. POST to Railway:
+### 1. Charts via tradingview-mcp (authoritative for chart captures)
+
+**Preferred — single composite screenshot (if `tv_multi_pane` is available):**
+- `tv_navigate_symbol(ticker)`
+- `tv_multi_pane(ticker, panes=["1D", "1W", "60", "phase_osc"])` — 2×2 layout: daily, weekly, 60m, phase-osc pane
+- `tv_screenshot()` → upload to Vercel Blob via `POST /api/swing/blob/upload-token` flow → capture as `chart_composite_url`
+- Read indicators once: `tv_read_indicators()` → store full dict as `tv_indicators`
+
+**Fallback (if `tv_multi_pane` not available — 3 separate captures):**
+- `tv_navigate_symbol(ticker)` → `tv_set_timeframe('1D')` → `tv_screenshot()` → upload → capture `chart_daily_url`; `tv_read_indicators()` → store daily indicators
+- `tv_set_timeframe('1W')` → `tv_screenshot()` → upload → capture `chart_weekly_url`
+- `tv_set_timeframe('60')` → `tv_screenshot()` → upload → capture `chart_60m_url`
+
+The Saty Pine-script indicator values from `tv_read_indicators()` (EMA10, EMA20, Phase Osc, ATR Levels) are the authoritative numbers for the methodology — do not recompute them in Python.
+
+**Do not** use manual DOM scraping or computer-use clicking to capture TV charts.
+
+### 2. Fundamentals via Claude-in-Chrome on Deepvue (data TV doesn't expose)
+
+- Navigate Deepvue to the ticker data panel.
+- `get_page_text` → parse into a dict: revenue/EPS growth, beta, ADV, next earnings, theme/sector, narrative.
+- If parse fails, store raw text in `deepvue_panel.raw`.
+
+### 3. Read recent snapshot history
+
+`GET /api/swing/ideas/<id>/snapshots?limit=5` — pull recent history for context.
+
+### 4. Claude vision analysis
+
+Pass chart screenshot(s) + `tv_indicators` + `deepvue_panel` + recent snapshots + prior thesis.
+Write a 3-paragraph analysis:
+- What the chart is showing vs last snapshot (daily action, cycle-stage read per Kell)
+- What the Deepvue data panel adds (fundamentals, theme strength, RS)
+- Next action: wait / add / trim / exit — with reasoning
+
+### 5. POST snapshot to Railway
 
 ```
 POST /api/swing/ideas/<id>/snapshots
@@ -2935,17 +3001,21 @@ Content-Type: application/json
   "snapshot_type": "daily",
   "claude_analysis": "<the 3 paragraphs>",
   "claude_model": "claude-opus-4-7",
-  "chart_daily_url": "<blob url>",
-  "chart_weekly_url": "<blob url>",
-  "chart_60m_url": "<blob url>",
+  "chart_daily_url": "<blob url or null if composite>",
+  "chart_weekly_url": "<blob url or null if composite>",
+  "chart_60m_url": "<blob url or null if composite>",
   "deepvue_panel": { ... parsed panel ... },
-  "analysis_sources": { "deepvue_url": "..." }
+  "analysis_sources": {
+    "tv_indicators": { ... from tv_read_indicators() ... },
+    "chart_mode": "composite|separate",
+    "deepvue_url": "..."
+  }
 }
 ```
 
 Also POST `deep_thesis` via `POST /api/swing/ideas/<id>/thesis { layer: "deep", ... }` (Plan 3 endpoint).
 
-9. Sleep 10 seconds before the next ticker (to avoid hammering Deepvue and to pace Max rate limits).
+### 6. Sleep 10s before next ticker
 
 ## Final Slack message
 
@@ -2953,22 +3023,117 @@ Also POST `deep_thesis` via `POST /api/swing/ideas/<id>/thesis { layer: "deep", 
 
 ## Failure modes
 
-- Screenshot fails: skip this timeframe but continue with other 2.
-- Data panel scrape fails: proceed with only chart analysis; note in `analysis_sources`.
-- Max rate limit hit mid-run: abort, Slack the count completed, leave remaining ideas for next run.
+- `tv_health_check` fails mid-run: abort remaining tickers, Slack partial count.
+- TV screenshot fails for a ticker: skip to next ticker, note in `analysis_sources`.
+- Deepvue panel scrape fails: proceed with chart-only analysis; record `"deepvue_panel": null`.
+- Max rate limit hit mid-run: abort, Slack the count completed, leave remaining for next run.
 - Railway 5xx: retry once with backoff; if still failing, Slack the error.
 
 ## Non-goals
 
-- Don't invent new ideas here — only analyze already-active ones. New-idea creation is the pre-market detection pipeline's job.
-- Don't touch `swing_ideas.status` from this skill (except via thesis POST which doesn't change status).
+- Don't invent new ideas — only analyze already-active ones.
+- Don't touch `swing_ideas.status` from this skill.
+- Don't use DOM scraping or computer-use for TV chart capture (use `tv_*` tools only).
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add .claude/skills/swing-deep-analyze.md
-git commit -m "feat(swing): add /swing-deep-analyze Claude Code skill"
+git commit -m "feat(swing): rewrite /swing-deep-analyze to use tradingview-mcp for charts + indicators"
+```
+
+---
+
+## Task 22b: `/swing-create-alerts` Claude Code skill (Mac)
+
+**Files:**
+- Create: `.claude/skills/swing-create-alerts.md`
+- Modify: `api/endpoints/swing_postmarket.py` — add `PATCH /api/swing/ideas/<id>/alerts` endpoint
+- Modify: `api/schemas/swing.py` — add `AlertsPatchRequest` Pydantic model
+
+**Schema note:** `tv_alert_ids` is stored in the existing `risk_flags` JSONB field on `swing_ideas` (no migration needed — JSONB is schemaless). The patch endpoint merges IDs into `risk_flags.tv_alert_ids`.
+
+**New endpoint (add to `swing_postmarket.py`):**
+```python
+class AlertsPatchRequest(BaseModel):
+    tv_alert_ids: list[str]
+
+@router.patch("/ideas/{idea_id}/alerts", dependencies=[Depends(require_swing_token)])
+def patch_idea_alerts(idea_id: UUID, body: AlertsPatchRequest, sb=Depends(_get_supabase)):
+    """Merge (or clear) tv_alert_ids in risk_flags. Idempotent — re-patching with same IDs is safe."""
+    idea = sb.table("swing_ideas").select("risk_flags").eq("id", str(idea_id)).single().execute().data
+    flags = idea.get("risk_flags") or {}
+    # Deduplicate: union of existing + new IDs (empty list clears)
+    existing = set(flags.get("tv_alert_ids") or [])
+    merged = sorted(existing | set(body.tv_alert_ids)) if body.tv_alert_ids else []
+    flags["tv_alert_ids"] = merged
+    sb.table("swing_ideas").update({"risk_flags": flags}).eq("id", str(idea_id)).execute()
+    return {"tv_alert_ids": merged}
+```
+
+**TDD (append to `tests/swing/test_postmarket_pipeline.py`):**
+- [ ] `PATCH /api/swing/ideas/<id>/alerts` with `{tv_alert_ids: ["a","b"]}` → `risk_flags.tv_alert_ids == ["a","b"]`
+- [ ] Re-patch with same IDs → no duplicates.
+- [ ] Patch with `{tv_alert_ids: []}` → clears the list.
+- [ ] Unauthenticated patch → 401.
+
+**New skill file:**
+
+- [ ] **Step 1: Write skill**
+
+```markdown
+# .claude/skills/swing-create-alerts.md
+---
+description: Auto-create TradingView price alerts on high-confluence swing ideas. Called from end of /swing-analyze-pending or triggered manually.
+trigger_phrases:
+  - /swing-create-alerts
+required_mcps:
+  - tradingview   # tv_create_alert, tv_delete_alert
+---
+
+# /swing-create-alerts
+
+## Goal
+For each active idea with `confluence_score >= 7` that has no recorded `tv_alert_ids`, create 3 TradingView alerts (entry, stop, T1) via tradingview-mcp, then record the alert IDs on the idea.
+
+## Preflight
+Call `tv_health_check`. If not OK: Slack warn + exit.
+
+## Alert creation loop
+
+1. `GET /api/swing/ideas?status_in=watching,triggered,adding,trailing&order=-confluence_score`
+2. For each idea with `confluence_score >= 7`:
+   a. **Idempotency check**: read `risk_flags.tv_alert_ids`. If non-empty → log "SKIP {ticker}: alerts already exist" → continue.
+   b. Create three alerts:
+      ```
+      tv_create_alert(ticker, price=entry_zone_low, condition='crosses_above', message='SWING_ENTRY {ticker}')
+      tv_create_alert(ticker, price=stop_price,     condition='crosses_below', message='SWING_STOP {ticker}')
+      tv_create_alert(ticker, price=first_target,   condition='crosses_above', message='SWING_T1 {ticker}')
+      ```
+   c. Collect returned alert IDs `[id1, id2, id3]`.
+   d. `PATCH /api/swing/ideas/<id>/alerts` with `{tv_alert_ids: [id1, id2, id3]}`.
+   e. Log "Created 3 alerts for {ticker}: {ids}".
+
+## Alert cleanup (call from post-market pipeline or manually)
+
+When an idea transitions to `exited` or `invalidated`:
+1. Read `risk_flags.tv_alert_ids`.
+2. For each ID: `tv_delete_alert(id)`.
+3. `PATCH /api/swing/ideas/<id>/alerts` with `{tv_alert_ids: []}` to clear.
+
+The post-market pipeline (`run_swing_postmarket_snapshot`) handles stop-out cleanup automatically. For manual invalidation, trigger cleanup from the `/swing-ideas/[id]` page actions.
+
+## Non-goals
+- Don't create alerts for ideas with `confluence_score < 7`.
+- Don't double-create: the idempotency check prevents re-run issues.
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add api/endpoints/swing_postmarket.py api/schemas/swing.py .claude/skills/swing-create-alerts.md tests/swing/test_postmarket_pipeline.py
+git commit -m "feat(swing): add PATCH /alerts endpoint + /swing-create-alerts skill for TV alert auto-creation"
 ```
 
 ---
@@ -3286,7 +3451,11 @@ All the following must be green before Plan 4 is declared complete:
 - [ ] `/swing-ideas` page shows Active / Watching / Exited / Universe / Model Book / Weekly tabs all live (no "Coming Soon").
 - [ ] `/swing-ideas/[id]` shows Thesis (from Plan 3), Timeline, Charts, Fundamentals, and Actions sections.
 - [ ] Chart upload via Vercel Blob works end-to-end: drag → Blob URL → Railway record → appears in gallery.
-- [ ] `/swing-deep-analyze`, `/swing-weekly-synth`, `/swing-model-book-add` markdown skills exist in `.claude/skills/`.
+- [ ] `/swing-deep-analyze`, `/swing-create-alerts`, `/swing-weekly-synth`, `/swing-model-book-add` markdown skills exist in `.claude/skills/`.
+- [ ] `tv_health_check` passes; `tv_screenshot` produces valid charts for top-10 ideas in Task 22 smoke test.
+- [ ] TradingView alerts auto-create (3 per idea with `confluence_score >= 7`) and `tv_alert_ids` are recorded in `risk_flags`. Re-running `/swing-create-alerts` on same ideas does not duplicate alerts.
+- [ ] TV alerts auto-delete on idea `exited` / `invalidated` transition — `tv_delete_alert` called for each recorded ID.
+- [ ] Deep analysis snapshots include `tv_indicators` (from `tv_read_indicators()`) in `analysis_sources` and chart URLs in the snapshot row.
 - [ ] All `tests/swing/*` pass.
 - [ ] No `from anthropic`/`import anthropic` in `api/` (excluding `tests/`).
 - [ ] `frontend/npm run build` is clean.
@@ -3313,9 +3482,12 @@ All the following must be green before Plan 4 is declared complete:
 1. **`last_base_breakout_idx` lookup** — current implementation scans `swing_events` for `setup_fired` with `payload.setup_kell='base_n_break'`. Confirm Plan 2 writes this payload shape when the base-n-break detector fires. If not, the Exhaustion Extension Kell-direct branch will never trigger; either fix Plan 2's payload or look up via `swing_idea_stage_transitions` with `to_stage='base_n_break'`.
 2. **Idea r_multiple column** — the Exited tab displays R-multiple but `swing_ideas` doesn't currently have it. Decide: add a nullable `r_multiple` column via a thin migration, or surface it only on model-book entries and show "—" on exited-tab rows.
 3. **`useSwingIdeas({ status: [...] })` hook shape** — if Plan 3's hook only takes a single-status filter, extend it to accept an array before the Exited tab lands.
-4. **Deepvue URL format** — skill Task 22 guesses `https://deepvue.com/charts/<TICKER>`. First real run may need to tune to the actual route (e.g., `https://deepvue.com/ticker/<TICKER>?panel=chart`). Plan to patch the skill after first successful run.
-5. **Max rate-limit observation** — after the first full week, measure messages consumed by scheduled skills + ad-hoc; if close to 5-hour window cap, reduce top-10 to top-5 in `/swing-deep-analyze`.
-6. **Multi-tenant Supabase singletons** — `functools.lru_cache(maxsize=1)` on `_get_supabase()` is copied across 5 endpoint modules. Acceptable duplication for Plan 4; consolidate into `api/clients/supabase.py` in a future refactor pass.
-7. **Idempotency-Key handling** — current plan relies on natural unique keys (snapshot by `(idea_id, date, type)`, events by type+date dedupe). If we later need true replay protection for arbitrary POSTs (e.g., retried chart uploads from the Mac), add a `swing_idempotency` table.
-8. **`_last_base_breakout_idx` date matching** — uses `df["date"]` direct comparison. If yfinance returns timezone-aware timestamps and events store UTC strings, may need to normalize both sides. Verify on first post-market run.
-9. **Slack exit-out auto-open dialog param** — the query-param `?openPromote=1` auto-opens the dialog once. Consider also auto-clearing the param on dialog close so a browser refresh doesn't re-trigger.
+4. **Deepvue URL format** — skill Task 22 uses Deepvue only for the data panel now (charts come from TV). Still need to confirm the exact Deepvue URL for the fundamentals panel on first run (e.g., `https://deepvue.com/ticker/<TICKER>?panel=data`). Plan to patch the skill after first successful run.
+5. **TradingView Desktop version pinning** — tradingview-mcp uses undocumented Electron APIs; TV Desktop updates can silently break it. Record the exact TV Desktop version in `docs/swing/tradingview-mcp-setup.md` during Task 0. Define a rollback procedure (reinstall from archived installer) before enabling TV auto-updates.
+6. **`tv_multi_pane` vs 3 separate captures** — if `tv_multi_pane` is available, a single composite screenshot reduces blob storage and collapses Claude vision to one call. Tradeoff: individual screenshots may give Claude higher visual clarity per chart. Test both in Task 22 smoke test and pick based on Claude's demonstrated analysis quality.
+7. **Alert deletion cadence** — two options: (a) delete immediately on exit/invalidation (requires Mac to be online at that moment), (b) nightly sweep finding ideas in `exited`/`invalidated` with non-empty `tv_alert_ids`. Implement (a) via post-market pipeline; add (b) as a fallback sweep in the weekend-refresh skill if Mac downtime is observed.
+8. **Max rate-limit observation** — after the first full week, measure messages consumed by scheduled skills + ad-hoc; if close to 5-hour window cap, reduce top-10 to top-5 in `/swing-deep-analyze`.
+9. **Multi-tenant Supabase singletons** — `functools.lru_cache(maxsize=1)` on `_get_supabase()` is copied across 5 endpoint modules. Acceptable duplication for Plan 4; consolidate into `api/clients/supabase.py` in a future refactor pass.
+10. **Idempotency-Key handling** — current plan relies on natural unique keys (snapshot by `(idea_id, date, type)`, events by type+date dedupe). If we later need true replay protection for arbitrary POSTs (e.g., retried chart uploads from the Mac), add a `swing_idempotency` table.
+11. **`_last_base_breakout_idx` date matching** — uses `df["date"]` direct comparison. If yfinance returns timezone-aware timestamps and events store UTC strings, may need to normalize both sides. Verify on first post-market run.
+12. **Slack exit-out auto-open dialog param** — the query-param `?openPromote=1` auto-opens the dialog once. Consider also auto-clearing the param on dialog close so a browser refresh doesn't re-trigger.
