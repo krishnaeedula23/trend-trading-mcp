@@ -73,6 +73,15 @@ class SwingIdeaListResponse(BaseModel):
     total: int
 
 
+class PipelineRunResponse(BaseModel):
+    new_ideas: int
+    transitions: int
+    invalidations: int
+    universe_source: str
+    universe_size: int
+    market_health: dict[str, Any] = {}
+
+
 class SetupHitResponse(BaseModel):
     """Compact detector output for ad-hoc detection — used in Plan 3."""
     ticker: str

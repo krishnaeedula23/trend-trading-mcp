@@ -30,14 +30,19 @@ function getBaseUrl(): string {
 export async function railwayFetch(
   path: string,
   body?: unknown,
-  opts?: { signal?: AbortSignal }
+  opts?: { signal?: AbortSignal; authToken?: string }
 ): Promise<Response> {
   const base = getBaseUrl();
   const url = `${base}${path}`;
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts?.authToken) {
+    headers["Authorization"] = `Bearer ${opts.authToken}`;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
     signal: opts?.signal,

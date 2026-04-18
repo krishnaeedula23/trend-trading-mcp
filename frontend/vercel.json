@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/daily-screeners",
-      "schedule": "0 14 * * 1-5"
-    },
-    {
-      "path": "/api/cron/market-monitor",
-      "schedule": "30 21 * * 1-5"
+      "path": "/api/cron/daily-dispatcher",
+      "schedule": "0 13,21 * * 1-5"
     }
   ]
 }

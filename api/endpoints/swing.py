@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
 from supabase import Client, create_client
 
 from api.indicators.swing.universe.resolver import (
@@ -15,6 +15,7 @@ from api.indicators.swing.universe.resolver import (
     save_universe_batch,
 )
 from api.schemas.swing import (
+    PipelineRunResponse,
     SwingIdea,
     SwingIdeaListResponse,
     UniverseAddSingleRequest,
@@ -195,3 +196,21 @@ def get_universe_history():
         else:
             batches[bid].ticker_count += 1
     return UniverseHistoryResponse(batches=list(batches.values())[:50])
+
+
+def _verify_cron_auth(authorization: str | None) -> None:
+    """Verify Bearer token against CRON_SECRET. If env var is unset, skip check (local dev)."""
+    secret = os.environ.get("CRON_SECRET")
+    if not secret:
+        return
+    if authorization != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@router.post("/pipeline/premarket", response_model=PipelineRunResponse)
+def run_premarket(authorization: str | None = Header(default=None)):
+    _verify_cron_auth(authorization)
+    from api.indicators.swing.pipeline import run_premarket_detection
+    sb = _get_supabase()
+    result = run_premarket_detection(sb)
+    return PipelineRunResponse(**result)
