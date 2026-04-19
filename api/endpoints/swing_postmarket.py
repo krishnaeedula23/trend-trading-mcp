@@ -18,7 +18,8 @@ from api.endpoints.swing import _verify_cron_auth
 from supabase import Client, create_client
 
 from api.indicators.swing.pipeline.postmarket import run_swing_postmarket_snapshot
-from api.schemas.swing import PostmarketRunResponse
+from api.indicators.swing.pipeline.universe_refresh import run_swing_universe_refresh
+from api.schemas.swing import PostmarketRunResponse, UniverseRefreshResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/swing/pipeline", tags=["swing-pipeline"])
@@ -44,3 +45,11 @@ def trigger_postmarket(authorization: str | None = Header(default=None)) -> Post
         stop_violations=result.stop_violations,
         snapshots_written=result.snapshots_written,
     )
+
+
+@router.post("/universe-refresh", response_model=UniverseRefreshResponse)
+def trigger_universe_refresh(authorization: str | None = Header(default=None)) -> UniverseRefreshResponse:
+    _verify_cron_auth(authorization)
+    sb = _get_supabase()
+    result = run_swing_universe_refresh(sb)
+    return UniverseRefreshResponse(**result)
