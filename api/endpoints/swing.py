@@ -19,6 +19,7 @@ from api.indicators.swing.universe.resolver import (
 from api.endpoints.swing_auth import require_swing_token, idempotent
 from api.endpoints import swing_ticker_service as svc
 from api.schemas.swing import (
+    EventResponse,
     EventWriteRequest,
     EventWriteResponse,
     PipelineRunResponse,
@@ -322,6 +323,14 @@ def write_event(
         }
 
     return idempotent(sb, idempotency_key, f"/ideas/{idea_id}/events", _do)
+
+
+@router.get("/ideas/{idea_id}/events", response_model=list[EventResponse])
+def list_events(idea_id: UUID) -> list[EventResponse]:
+    sb = _get_supabase()
+    rows = (sb.table("swing_events").select("*").eq("idea_id", str(idea_id))
+            .order("occurred_at", desc=True).execute().data or [])
+    return [EventResponse(**r) for r in rows]
 
 
 @router.get("/ticker/{ticker}/bars", response_model=TickerBarsResponse)
