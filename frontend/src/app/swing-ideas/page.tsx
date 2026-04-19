@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UniverseManager } from "@/components/swing/universe-manager"
 import { IdeasList } from "@/components/swing/ideas-list"
 import { MarketHealthBar } from "@/components/swing/market-health-bar"
+import { ExitedList } from "@/components/swing/exited-list"
 
 function ComingSoon({ name }: { name: string }) {
   return (
@@ -28,7 +29,7 @@ export default function SwingIdeasPage() {
         <TabsList>
           <TabsTrigger value="active">Active</TabsTrigger>
           <TabsTrigger value="watching">Watching</TabsTrigger>
-          <TabsTrigger value="exited" disabled>Exited <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
+          <TabsTrigger value="exited">Exited</TabsTrigger>
           <TabsTrigger value="universe">Universe</TabsTrigger>
           <TabsTrigger value="model-book" disabled>Model Book <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
           <TabsTrigger value="weekly" disabled>Weekly <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
@@ -36,7 +37,7 @@ export default function SwingIdeasPage() {
 
         <TabsContent value="active"><IdeasList status="active" /></TabsContent>
         <TabsContent value="watching"><IdeasList status="watching" /></TabsContent>
-        <TabsContent value="exited"><ComingSoon name="Exited" /></TabsContent>
+        <TabsContent value="exited"><ExitedList /></TabsContent>
         <TabsContent value="universe"><UniverseManager /></TabsContent>
         <TabsContent value="model-book"><ComingSoon name="Model Book" /></TabsContent>
         <TabsContent value="weekly"><ComingSoon name="Weekly Synthesis" /></TabsContent>
