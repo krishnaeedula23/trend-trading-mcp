@@ -63,6 +63,7 @@ _SWING_SCHEMA: dict[str, set[str]] = {
         "id", "idea_id", "event_id", "model_book_id", "image_url", "thumbnail_url",
         "timeframe", "source", "annotations", "caption", "captured_at",
     },
+    "swing_idempotency_keys": {"key", "endpoint", "response_json", "created_at"},
 }
 
 
