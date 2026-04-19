@@ -70,7 +70,7 @@ def test_smoke_pipeline_runs_and_returns_expected_shape(monkeypatch):
     result = run_premarket_detection(sb, fetch_bars=fetcher)
 
     assert set(result.keys()) == {
-        "new_ideas", "transitions", "invalidations",
+        "new_ideas", "transitions", "invalidations", "errors",
         "universe_source", "universe_size", "market_health",
     }
     assert result["universe_source"] == "deepvue"
@@ -157,6 +157,7 @@ def test_empty_universe_returns_zeros_and_no_slack(monkeypatch):
         "new_ideas": 0,
         "transitions": 0,
         "invalidations": 0,
+        "errors": 0,
         "universe_source": "empty",
         "universe_size": 0,
         "market_health": {},

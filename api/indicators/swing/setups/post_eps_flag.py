@@ -6,7 +6,6 @@ import logging
 import pandas as pd
 
 from api.indicators.common.moving_averages import ema
-from api.indicators.swing.earnings_calendar import last_earnings_gap_pct
 from api.indicators.swing.setups.base import SetupHit, volume_vs_avg
 
 logger = logging.getLogger(__name__)
@@ -31,22 +30,23 @@ def _detect(bars: pd.DataFrame, ticker: str) -> SetupHit | None:
     if len(bars) < 15:
         return None
 
-    # Rule 1: earnings gap up > 5% in last 10 bars
-    gap_pct = last_earnings_gap_pct(ticker, bars, 10)
-    if gap_pct is None:
-        return None
-
-    # Rule 2: locate the gap bar index within bars
+    # Rule 1+2: earnings gap up ≥ 5% in last 10 bars. We pick the most-recent
+    # qualifying gap bar and report the gap size at THAT bar (keeps gap_pct and
+    # gap_bars_ago consistent — last_earnings_gap_pct returns the largest gap,
+    # which may not be the most recent).
     n = len(bars)
     start_search = max(n - 10, 1)
     gap_bar_idx: int | None = None
+    gap_pct: float | None = None
     for i in range(start_search, n):
         prev_close = float(bars["close"].iloc[i - 1])
         cur_open = float(bars["open"].iloc[i])
-        if prev_close > 0 and (cur_open - prev_close) / prev_close >= 0.05:
-            gap_bar_idx = i
-            # Take the last qualifying gap
-    if gap_bar_idx is None:
+        if prev_close > 0:
+            g = (cur_open - prev_close) / prev_close
+            if g >= 0.05:
+                gap_bar_idx = i
+                gap_pct = g
+    if gap_bar_idx is None or gap_pct is None:
         return None
 
     # Consolidation window: bars strictly after the gap bar through current (inclusive)

@@ -17,6 +17,9 @@ def score_hits(
     Returns list of (hit, confluence_score) tuples in the same order as input.
     """
     multi_setup_bonus = 2 if len(hits) >= 2 else 0
+    # rs_10d is a log-return spread (from rs_vs_benchmark). log(1.05) ≈ 0.0488,
+    # so `> 0.05` corresponds to ~5.13% arithmetic outperformance vs QQQ over 10d —
+    # slightly stricter than the spec's "5%+" but same intent.
     rs_bonus = 1 if ctx.get("rs_10d", 0) > 0.05 else 0
     market_bonus = 1 if market_health.green_light else 0
     theme_bonus = 1 if ticker in ctx.get("theme_leaders", []) else 0

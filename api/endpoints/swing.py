@@ -153,10 +153,15 @@ def list_ideas(status: str | None = None, limit: int = 50):
     q = sb.table("swing_ideas").select("*")
     if status:
         q = q.eq("status", status)
-    # Order by confluence desc, detected_at desc — FakeSupabaseClient supports .order(col, desc)
-    rows = q.order("confluence_score", desc=True).limit(limit).execute().data or []
-    # Secondary sort by detected_at in Python (fake client only supports one .order())
-    rows.sort(key=lambda r: (r.get("confluence_score", 0), r.get("detected_at") or ""), reverse=True)
+    # Chained .order() — primary: confluence_score desc, secondary: detected_at desc.
+    # Both FakeSupabaseClient and real supabase-py apply orders in the order given.
+    rows = (
+        q.order("confluence_score", desc=True)
+        .order("detected_at", desc=True)
+        .limit(limit)
+        .execute()
+        .data or []
+    )
     ideas = [SwingIdea(**r) for r in rows]
     return SwingIdeaListResponse(ideas=ideas, total=len(ideas))
 
@@ -199,9 +204,21 @@ def get_universe_history():
 
 
 def _verify_cron_auth(authorization: str | None) -> None:
-    """Verify Bearer token against CRON_SECRET. If env var is unset, skip check (local dev)."""
+    """Verify Bearer token against CRON_SECRET.
+
+    When the env var is unset (None) we skip — this is intentional for local dev.
+    An EMPTY-string CRON_SECRET is treated as misconfiguration and we still skip,
+    but we log a warning so it's visible. Production deploys must set a real value.
+    """
+    import logging
     secret = os.environ.get("CRON_SECRET")
-    if not secret:
+    if secret is None:
+        return
+    if secret == "":
+        logging.getLogger(__name__).warning(
+            "CRON_SECRET is empty — cron endpoint is unprotected. "
+            "Set CRON_SECRET to a non-empty value in production."
+        )
         return
     if authorization != f"Bearer {secret}":
         raise HTTPException(status_code=401, detail="Unauthorized")

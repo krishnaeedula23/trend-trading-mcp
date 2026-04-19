@@ -14,7 +14,7 @@ interface IdeasListProps {
 
 function computeRR(idea: SwingIdea): string {
   const { entry_zone_low, entry_zone_high, stop_price, first_target } = idea
-  if (first_target === null) return "—"
+  if (first_target === null || stop_price === null || stop_price === undefined) return "—"
   const midpoint =
     entry_zone_low !== null && entry_zone_high !== null
       ? (entry_zone_low + entry_zone_high) / 2
@@ -143,17 +143,22 @@ export function IdeasList({ status }: IdeasListProps) {
   return (
     <div className="rounded border border-border/40 overflow-x-auto">
       <table className="w-full text-xs">
+        <caption className="sr-only">
+          {status === "active" ? "Active swing ideas" : "Watching swing ideas"} — ranked by confluence score
+        </caption>
         <thead>
           <tr className="border-b border-border/40 text-[10px] text-muted-foreground uppercase tracking-wide">
-            <th className="px-3 py-2 text-left font-medium">Status</th>
-            <th className="px-3 py-2 text-left font-medium">Stage</th>
-            <th className="px-3 py-2 text-left font-medium">Ticker</th>
-            <th className="px-3 py-2 text-center font-medium">Conf</th>
-            <th className="px-3 py-2 text-left font-medium">Entry</th>
-            <th className="px-3 py-2 text-left font-medium">Stop</th>
-            <th className="px-3 py-2 text-left font-medium">Targets</th>
-            <th className="px-3 py-2 text-center font-medium">R:R</th>
-            <th className="px-3 py-2 text-center font-medium w-8"></th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Status</th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Stage</th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Ticker</th>
+            <th scope="col" className="px-3 py-2 text-center font-medium">Conf</th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Entry</th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Stop</th>
+            <th scope="col" className="px-3 py-2 text-left font-medium">Targets</th>
+            <th scope="col" className="px-3 py-2 text-center font-medium">R:R</th>
+            <th scope="col" className="px-3 py-2 text-center font-medium w-8">
+              <span className="sr-only">Expand row</span>
+            </th>
           </tr>
         </thead>
         <tbody>

@@ -22,6 +22,8 @@ export default function SwingIdeasPage() {
         <p className="text-xs text-muted-foreground">Kell + Saty unified swing setups — detection, analysis, tracking</p>
       </div>
 
+      <MarketHealthBar />
+
       <Tabs defaultValue="universe" className="space-y-4">
         <TabsList>
           <TabsTrigger value="active">Active</TabsTrigger>
@@ -32,18 +34,8 @@ export default function SwingIdeasPage() {
           <TabsTrigger value="weekly" disabled>Weekly <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
         </TabsList>
 
-        <TabsContent value="active">
-          <div className="space-y-4">
-            <MarketHealthBar />
-            <IdeasList status="active" />
-          </div>
-        </TabsContent>
-        <TabsContent value="watching">
-          <div className="space-y-4">
-            <MarketHealthBar />
-            <IdeasList status="watching" />
-          </div>
-        </TabsContent>
+        <TabsContent value="active"><IdeasList status="active" /></TabsContent>
+        <TabsContent value="watching"><IdeasList status="watching" /></TabsContent>
         <TabsContent value="exited"><ComingSoon name="Exited" /></TabsContent>
         <TabsContent value="universe"><UniverseManager /></TabsContent>
         <TabsContent value="model-book"><ComingSoon name="Model Book" /></TabsContent>

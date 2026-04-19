@@ -17,13 +17,21 @@ def detect(bars: pd.DataFrame, qqq_bars: pd.DataFrame, ctx: dict) -> SetupHit | 
     if len(bars) < 30:
         return None
 
-    # 1: Prior Wedge Pop within last 30 bars
+    # 1: Prior Wedge Pop within last 30 bars (guard against None/malformed detected_at)
     cutoff_date = pd.to_datetime(bars["date"].iloc[-30]).tz_localize(None)
-    has_prior = any(
-        p.get("setup_kell") == "wedge_pop"
-        and pd.to_datetime(p["detected_at"]).tz_localize(None) >= cutoff_date
-        for p in ctx.get("prior_ideas", [])
-    )
+
+    def _matches(p: dict) -> bool:
+        if p.get("setup_kell") != "wedge_pop":
+            return False
+        detected = p.get("detected_at")
+        if not detected:
+            return False
+        try:
+            return pd.to_datetime(detected).tz_localize(None) >= cutoff_date
+        except (ValueError, TypeError):
+            return False
+
+    has_prior = any(_matches(p) for p in ctx.get("prior_ideas", []))
     if not has_prior:
         return None
 
@@ -63,14 +71,7 @@ def detect(bars: pd.DataFrame, qqq_bars: pd.DataFrame, ctx: dict) -> SetupHit | 
     if vol_ratio >= 0.8:
         return None
 
-    # Find detected_at for the matched prior wedge (first match for evidence)
-    prior_wedge_at = next(
-        p["detected_at"]
-        for p in ctx.get("prior_ideas", [])
-        if p.get("setup_kell") == "wedge_pop"
-        and pd.to_datetime(p["detected_at"]).tz_localize(None) >= cutoff_date
-    )
-    # Normalise to ISO date string
+    prior_wedge_at = next(p["detected_at"] for p in ctx.get("prior_ideas", []) if _matches(p))
     prior_wedge_at_str = str(pd.to_datetime(prior_wedge_at).date())
 
     dist_atr_ratio = dist_to_ema / cur_atr if cur_atr else 0.0

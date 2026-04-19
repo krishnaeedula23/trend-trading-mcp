@@ -77,6 +77,7 @@ class PipelineRunResponse(BaseModel):
     new_ideas: int
     transitions: int
     invalidations: int
+    errors: int = 0
     universe_source: str
     universe_size: int
     market_health: dict[str, Any] = {}
