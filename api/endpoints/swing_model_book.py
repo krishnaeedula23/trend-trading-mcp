@@ -86,6 +86,8 @@ def patch_entry(
     patch = {k: v for k, v in req.model_dump().items() if v is not None}
     patch["updated_at"] = datetime.now(timezone.utc).isoformat()
     sb.table("swing_model_book").update(patch).eq("id", str(entry_id)).execute()
+    # FakeSupabaseClient's .update().data isn't a reliable source of the updated row;
+    # re-SELECT for authoritative data. Real supabase-py also varies by version.
     rows = sb.table("swing_model_book").select("*").eq("id", str(entry_id)).execute().data or []
     return ModelBookResponse(**rows[0])
 

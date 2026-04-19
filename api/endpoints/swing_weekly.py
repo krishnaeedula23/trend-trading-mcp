@@ -5,8 +5,9 @@ import os
 from collections import defaultdict
 
 from fastapi import APIRouter
-from pydantic import BaseModel
 from supabase import Client, create_client
+
+from api.schemas.swing import WeeklyEntry, WeekGroup
 
 router = APIRouter(tags=["swing-weekly"])
 
@@ -16,19 +17,6 @@ def _get_supabase() -> Client:
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     return create_client(url, key)
-
-
-class WeeklyEntry(BaseModel):
-    idea_id: str
-    ticker: str
-    cycle_stage: str | None
-    status: str
-    claude_analysis: str | None
-
-
-class WeekGroup(BaseModel):
-    week_of: str
-    entries: list[WeeklyEntry]
 
 
 @router.get("/api/swing/weekly", response_model=list[WeekGroup])

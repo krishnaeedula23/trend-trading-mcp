@@ -8,15 +8,17 @@ in emergencies, to hand-patch a snapshot.
 from __future__ import annotations
 
 import functools
+import logging
 import os
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client, create_client
 
 from api.endpoints.swing_auth import require_swing_token
 from api.schemas.swing import SnapshotCreateRequest, SnapshotResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["swing-snapshots"])
 
 
@@ -57,5 +59,23 @@ def upsert_snapshot(
         "snapshot_type": req.snapshot_type,
         **patch,
     }
-    inserted = sb.table("swing_idea_snapshots").insert(row).execute()
-    return SnapshotResponse(**(inserted.data[0] if hasattr(inserted, "data") else row))
+    try:
+        sb.table("swing_idea_snapshots").insert(row).execute()
+    except Exception as exc:
+        # UNIQUE(idea_id, snapshot_date, snapshot_type) race with the pipeline:
+        # fall through to UPDATE on the existing row.
+        logger.warning(
+            "Snapshot insert raced (idea_id=%s, date=%s); retrying as update: %s",
+            idea_id, req.snapshot_date.isoformat(), exc,
+        )
+        sb.table("swing_idea_snapshots").update(patch).eq("idea_id", str(idea_id)).eq(
+            "snapshot_date", req.snapshot_date.isoformat()
+        ).eq("snapshot_type", req.snapshot_type).execute()
+    # Re-SELECT so we return the authoritative DB row (including server-assigned `id`).
+    fresh = (sb.table("swing_idea_snapshots").select("*")
+             .eq("idea_id", str(idea_id))
+             .eq("snapshot_date", req.snapshot_date.isoformat())
+             .eq("snapshot_type", req.snapshot_type).execute().data or [])
+    if not fresh:
+        raise HTTPException(500, "Snapshot write succeeded but re-SELECT returned nothing")
+    return SnapshotResponse(**fresh[0])

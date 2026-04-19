@@ -262,3 +262,16 @@ class UniverseRefreshResponse(BaseModel):
     base_count: int | None = None
     final_count: int | None = None
     batch_id: UUID | None = None
+
+
+class WeeklyEntry(BaseModel):
+    idea_id: str
+    ticker: str
+    cycle_stage: str | None
+    status: str
+    claude_analysis: str | None
+
+
+class WeekGroup(BaseModel):
+    week_of: str
+    entries: list[WeeklyEntry]

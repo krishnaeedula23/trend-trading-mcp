@@ -94,3 +94,18 @@ def test_postmarket_is_idempotent(mock_slack, mock_bars):
 
     snaps = sb.table("swing_idea_snapshots").rows
     assert len(snaps) == 1                 # unique (idea_id, snapshot_date, snapshot_type)
+
+
+@patch("api.indicators.swing.pipeline.postmarket._fetch_daily_bars")
+@patch("api.indicators.swing.pipeline.postmarket._post_slack_digest")
+def test_postmarket_preserves_prior_risk_flags(mock_slack, mock_bars):
+    """A flag that fired yesterday must stay True even if today only a different flag trips."""
+    sb = FakeSupabaseClient()
+    sb.table("swing_ideas").insert([_idea() | {"risk_flags": {"climax_bar": True}}])
+    mock_bars.return_value = _bars([100.0] * 50 + [200.0])  # triggers only far_above_10ema
+
+    pm.run_swing_postmarket_snapshot(sb)
+
+    ideas = sb.table("swing_ideas").rows
+    assert ideas[0]["risk_flags"]["far_above_10ema"] is True   # today's trigger
+    assert ideas[0]["risk_flags"]["climax_bar"] is True         # yesterday's flag preserved

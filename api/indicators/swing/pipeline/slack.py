@@ -23,6 +23,8 @@ def post_postmarket_digest(summary: dict[str, Any]) -> None:
     """Post the post-market digest to the swing Slack channel.
 
     `summary` keys: active_ideas, stage_transitions, exhaustion_warnings, stop_violations.
+
+    Must be called from sync context (uses asyncio.run internally).
     """
     lines = [
         ":closed_book: *Swing Post-Market Digest*",
@@ -47,6 +49,8 @@ def post_weekend_refresh_digest(result) -> None:
     """Post the Sunday universe-refresh digest to the swing Slack channel.
 
     `result` has attributes: skipped (bool), skip_reason, base_count, final_count.
+
+    Must be called from sync context (uses asyncio.run internally).
     """
     if result.skipped:
         text = f":arrows_counterclockwise: Skipped universe refresh: {result.skip_reason}"

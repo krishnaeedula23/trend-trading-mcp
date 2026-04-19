@@ -65,7 +65,12 @@ def _post_slack_digest(summary: dict) -> None:
 
 
 def _last_base_breakout_idx(sb: SupabaseLike, idea_id: str, df: pd.DataFrame) -> int | None:
-    """Find the index in df where this idea's last base_n_break fired (from events)."""
+    """Find the positional index (0-based row number) in df where this idea's last
+    base_n_break fired (from events).
+
+    Caller contract: `df` MUST be range-indexed (e.g. output of `.reset_index()`).
+    The integer returned is a positional index for downstream `.iloc[...]` slicing.
+    """
     events = (
         sb.table("swing_events").select("*").eq("idea_id", idea_id)
         .eq("event_type", "setup_fired").execute().data or []
@@ -77,9 +82,10 @@ def _last_base_breakout_idx(sb: SupabaseLike, idea_id: str, df: pd.DataFrame) ->
             if not occurred:
                 continue
             target_date = pd.to_datetime(occurred).date()
-            matches = df.index[df["date"].apply(lambda d: pd.to_datetime(d).date()) == target_date]
-            if len(matches) > 0:
-                return int(matches[0])
+            mask = df["date"].apply(lambda d: pd.to_datetime(d).date()) == target_date
+            if mask.any():
+                # `mask.values.argmax()` returns the first True — always positional.
+                return int(mask.values.argmax())
     return None
 
 
@@ -93,6 +99,7 @@ def run_swing_postmarket_snapshot(sb: SupabaseLike) -> PostmarketResult:
     )
     active = [i for i in active if i["status"] not in ("exited", "invalidated")]
 
+    # TODO(plan-4): wire Plan 2 stage-transition detection
     stage_transitions = 0
     exhaustion_warnings = 0
     stop_violations = 0
@@ -131,10 +138,10 @@ def run_swing_postmarket_snapshot(sb: SupabaseLike) -> PostmarketResult:
             current_flags = idea.get("risk_flags") or {}
             new_flags = {
                 **current_flags,
-                "kell_2nd_extension": flag.kell_2nd_extension,
-                "climax_bar": flag.climax_bar,
-                "far_above_10ema": flag.far_above_10ema,
-                "weekly_air": flag.weekly_air,
+                "kell_2nd_extension": bool(current_flags.get("kell_2nd_extension")) or flag.kell_2nd_extension,
+                "climax_bar": bool(current_flags.get("climax_bar")) or flag.climax_bar,
+                "far_above_10ema": bool(current_flags.get("far_above_10ema")) or flag.far_above_10ema,
+                "weekly_air": bool(current_flags.get("weekly_air")) or flag.weekly_air,
                 "last_flagged_at": now.isoformat(),
             }
             patch = {"risk_flags": new_flags}
@@ -186,8 +193,18 @@ def run_swing_postmarket_snapshot(sb: SupabaseLike) -> PostmarketResult:
         if existing_snap:
             sb.table("swing_idea_snapshots").update(snap_row).eq("idea_id", idea["id"]).eq("snapshot_date", today.isoformat()).eq("snapshot_type", "daily").execute()
         else:
-            sb.table("swing_idea_snapshots").insert(snap_row).execute()
-            snapshots_written += 1
+            try:
+                sb.table("swing_idea_snapshots").insert(snap_row).execute()
+                snapshots_written += 1
+            except Exception as exc:
+                # UNIQUE(idea_id, snapshot_date, snapshot_type) race: another writer
+                # (Mac-POST or a retried cron) inserted between our SELECT and INSERT.
+                # Fall through to UPDATE; don't increment snapshots_written.
+                logger.warning(
+                    "Snapshot insert raced (idea_id=%s); retrying as update: %s",
+                    idea["id"], exc,
+                )
+                sb.table("swing_idea_snapshots").update(snap_row).eq("idea_id", idea["id"]).eq("snapshot_date", today.isoformat()).eq("snapshot_type", "daily").execute()
 
     _post_slack_digest({
         "active_ideas": len(active),
