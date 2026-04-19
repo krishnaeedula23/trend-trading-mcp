@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { useSwingCharts } from "@/hooks/use-swing-charts"
+import { useSwingCharts, useSwingModelBookCharts } from "@/hooks/use-swing-charts"
 import type { SwingChart } from "@/lib/types"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ChartUploadDropzone } from "./chart-upload-dropzone"
@@ -14,13 +14,23 @@ function chartMatchesTab(c: SwingChart, tab: TF): boolean {
   return c.timeframe === tab
 }
 
-export function ChartGallery({ ideaId }: { ideaId: string }) {
-  const { charts, mutate } = useSwingCharts(ideaId)
+export function ChartGallery({
+  ideaId,
+  modelBookId,
+}: {
+  ideaId?: string
+  modelBookId?: string
+}) {
+  const ideaHook = useSwingCharts(ideaId ?? null)
+  const modelBookHook = useSwingModelBookCharts(modelBookId ?? null)
+  const { charts, mutate } = modelBookId ? modelBookHook : ideaHook
   const [lightbox, setLightbox] = useState<SwingChart | null>(null)
 
   return (
     <div className="space-y-4">
-      <ChartUploadDropzone ideaId={ideaId} onUploaded={() => mutate()} />
+      {ideaId && (
+        <ChartUploadDropzone ideaId={ideaId} onUploaded={() => mutate()} />
+      )}
       <Tabs defaultValue="daily">
         <TabsList>{TFS.map(t => <TabsTrigger key={t} value={t}>{t}</TabsTrigger>)}</TabsList>
         {TFS.map(tab => (

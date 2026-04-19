@@ -11,3 +11,11 @@ export function useSwingCharts(ideaId: string | null) {
   )
   return { charts: data ?? [], isLoading, error, mutate }
 }
+
+export function useSwingModelBookCharts(modelBookId: string | null) {
+  const { data, isLoading, error, mutate } = useSWR<SwingChart[]>(
+    modelBookId ? `/api/swing/model-book/${modelBookId}/charts` : null,
+    fetcher,
+  )
+  return { charts: data ?? [], isLoading, error, mutate }
+}
