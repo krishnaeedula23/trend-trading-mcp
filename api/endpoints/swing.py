@@ -158,11 +158,20 @@ async def upload_csv(
 
 
 @router.get("/ideas", response_model=SwingIdeaListResponse)
-def list_ideas(status: str | None = None, limit: int = 50):
+def list_ideas(
+    status: str | None = None,
+    thesis_status: str | None = None,
+    ticker: str | None = None,
+    limit: int = 50,
+):
     sb = _get_supabase()
     q = sb.table("swing_ideas").select("*")
     if status:
         q = q.eq("status", status)
+    if thesis_status:
+        q = q.eq("thesis_status", thesis_status)
+    if ticker:
+        q = q.eq("ticker", ticker.upper())
     # Chained .order() — primary: confluence_score desc, secondary: detected_at desc.
     # Both FakeSupabaseClient and real supabase-py apply orders in the order given.
     rows = (

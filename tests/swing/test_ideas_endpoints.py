@@ -83,3 +83,29 @@ def test_get_idea_not_found(client, fake_sb):
     """GET with a non-existent UUID returns 404."""
     r = client.get(f"/api/swing/ideas/{uuid4()}")
     assert r.status_code == 404
+
+
+def test_list_ideas_thesis_status_filter(client, fake_sb):
+    """?thesis_status=pending returns only ideas with that thesis_status."""
+    _seed_idea(fake_sb, ticker="AAPL", thesis_status="pending")
+    _seed_idea(fake_sb, ticker="NVDA", thesis_status="pending")
+    _seed_idea(fake_sb, ticker="TSLA", thesis_status="ready")
+
+    r = client.get("/api/swing/ideas?thesis_status=pending")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 2
+    assert all(idea["thesis_status"] == "pending" for idea in body["ideas"])
+
+
+def test_list_ideas_ticker_filter(client, fake_sb):
+    """?ticker=NVDA returns only rows for that ticker (case-insensitive)."""
+    _seed_idea(fake_sb, ticker="NVDA", cycle_stage="wedge_pop")
+    _seed_idea(fake_sb, ticker="NVDA", cycle_stage="ema_crossback")
+    _seed_idea(fake_sb, ticker="AAPL")
+
+    r = client.get("/api/swing/ideas?ticker=nvda")  # lowercase upstreams to NVDA
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 2
+    assert all(idea["ticker"] == "NVDA" for idea in body["ideas"])
