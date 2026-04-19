@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,17 +81,36 @@ function IdeaRow({ idea }: { idea: SwingIdea }) {
         <tr className="border-b border-border/30 bg-card/20">
           <td colSpan={9} className="px-4 py-3 text-xs">
             <div className="space-y-2">
-              <p className="text-muted-foreground">
-                <span className="font-medium text-foreground">Thesis:</span>{" "}
-                {idea.base_thesis ?? "No thesis yet — Plan 3"}
-              </p>
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-medium text-foreground">Thesis</span>
+                  {idea.thesis_status === "pending" && (
+                    <span className="text-[9px] rounded bg-amber-500/20 text-amber-500 px-1.5 py-0.5">
+                      pending
+                    </span>
+                  )}
+                </div>
+                {idea.base_thesis ? (
+                  <p className="text-muted-foreground mt-1 line-clamp-3">
+                    {idea.base_thesis}
+                  </p>
+                ) : (
+                  <p className="text-[10px] italic text-amber-500/80 mt-1">
+                    Base thesis pending — runs 6:30am PT.
+                  </p>
+                )}
+                <Link
+                  href={`/swing-ideas/${idea.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[10px] text-primary hover:underline mt-1 inline-block"
+                >
+                  View full →
+                </Link>
+              </div>
               <p className="text-muted-foreground text-[10px]">
                 Stage evolution — coming Plan 4
               </p>
               <div className="flex gap-2 pt-1">
-                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={(e) => { e.stopPropagation() }}>
-                  View Detail
-                </Button>
                 <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={(e) => { e.stopPropagation() }}>
                   Add Note
                 </Button>
