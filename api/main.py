@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.endpoints import analytics, iv_metrics, journal, market_monitor, options, satyland, scheduled, schwab, screener, swing, trades, webhooks
 from api.endpoints.swing_charts import router as swing_charts_router
 from api.endpoints.swing_postmarket import router as swing_postmarket_router
+from api.endpoints.swing_snapshots import router as swing_snapshots_router
 
 # If SCHWAB_TOKEN_B64 is set (Railway deployment), always write the token file
 # from the env var. This ensures a fresh token (from re-running schwab_auth.py
@@ -72,6 +73,7 @@ app.include_router(scheduled.router)
 app.include_router(swing.router)
 app.include_router(swing_charts_router)
 app.include_router(swing_postmarket_router)
+app.include_router(swing_snapshots_router)
 
 
 @app.get("/health", tags=["meta"])
