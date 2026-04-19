@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -94,3 +94,63 @@ class SetupHitResponse(BaseModel):
     second_target: float | None = None
     detection_evidence: dict[str, Any]
     raw_score: int
+
+
+# ── Plan 3: Claude-analysis-layer endpoints ─────────────────────────────────
+
+class ThesisWriteRequest(BaseModel):
+    layer: Literal["base", "deep"]
+    text: str = Field(min_length=10, max_length=20_000)
+    model: str                            # e.g. "claude-opus-4-7"
+    sources: list[str] | None = None      # URLs/filenames referenced
+    deepvue_panel: dict | None = None     # deep-layer only; base can pass None
+
+
+class ThesisWriteResponse(BaseModel):
+    idea_id: str
+    layer: Literal["base", "deep"]
+    updated_at: str
+
+
+class EventWriteRequest(BaseModel):
+    event_type: str = Field(min_length=1, max_length=64)
+    payload: dict | None = None
+    summary: str | None = Field(default=None, max_length=2_000)
+
+
+class EventWriteResponse(BaseModel):
+    event_id: int
+    idea_id: str
+    occurred_at: str
+
+
+class TickerBarEntry(BaseModel):
+    date: date
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+class TickerBarsResponse(BaseModel):
+    ticker: str
+    tf: Literal["daily", "weekly", "60m"]
+    bars: list[TickerBarEntry]
+
+
+class TickerFundamentalsResponse(BaseModel):
+    ticker: str
+    fundamentals: dict
+    next_earnings_date: date | None = None
+    beta: float | None = None
+    avg_daily_dollar_volume: float | None = None
+
+
+class TickerDetectResponse(BaseModel):
+    ticker: str
+    setups: list[dict]           # serialized SetupHit rows from Plan 2
+    fundamentals: dict
+    market_health: dict
+    data_sufficient: bool        # false if yfinance returned <60 bars
+    reason: str | None = None    # populated when data_sufficient=false
