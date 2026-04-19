@@ -16,6 +16,8 @@ from api.indicators.swing.universe.resolver import (
 )
 from api.endpoints.swing_auth import require_swing_token, idempotent
 from api.schemas.swing import (
+    EventWriteRequest,
+    EventWriteResponse,
     PipelineRunResponse,
     SwingIdea,
     SwingIdeaListResponse,
@@ -274,3 +276,33 @@ def write_thesis(
         return {"idea_id": str(idea_id), "layer": req.layer, "updated_at": now}
 
     return idempotent(sb, idempotency_key, f"/ideas/{idea_id}/thesis", _do)
+
+
+@router.post("/ideas/{idea_id}/events", response_model=EventWriteResponse,
+             dependencies=[Depends(require_swing_token)])
+def write_event(
+    idea_id: UUID,
+    req: EventWriteRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    sb = _get_supabase()
+    if not sb.table("swing_ideas").select("id").eq("id", str(idea_id)).execute().data:
+        raise HTTPException(status_code=404, detail=f"idea {idea_id} not found")
+
+    def _do() -> dict:
+        now = datetime.now(timezone.utc).isoformat()
+        ret = sb.table("swing_events").insert({
+            "idea_id": str(idea_id),
+            "event_type": req.event_type,
+            "occurred_at": now,
+            "payload": req.payload,
+            "summary": req.summary,
+        }).execute()
+        row = (ret.data or [{}])[0] if hasattr(ret, "data") else {}
+        return {
+            "event_id": row.get("id", 0),
+            "idea_id": str(idea_id),
+            "occurred_at": now,
+        }
+
+    return idempotent(sb, idempotency_key, f"/ideas/{idea_id}/events", _do)
