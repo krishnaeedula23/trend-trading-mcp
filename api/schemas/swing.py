@@ -147,3 +147,118 @@ class TickerDetectResponse(BaseModel):
     market_health: dict
     data_sufficient: bool        # false if yfinance returned <60 bars
     reason: str | None = None    # populated when data_sufficient=false
+
+
+class SnapshotCreateRequest(BaseModel):
+    snapshot_date: date
+    snapshot_type: Literal["daily", "weekly"] = "daily"
+    # Railway-populated (optional on Mac-side POST; required on Railway-internal upsert)
+    daily_close: float | None = None
+    daily_high: float | None = None
+    daily_low: float | None = None
+    daily_volume: int | None = None
+    ema_10: float | None = None
+    ema_20: float | None = None
+    sma_50: float | None = None
+    sma_200: float | None = None
+    weekly_ema_10: float | None = None
+    rs_vs_qqq_20d: float | None = None
+    phase_osc_value: float | None = None
+    kell_stage: str | None = None
+    saty_setups_active: list[str] | None = None
+    # Mac-populated
+    claude_analysis: str | None = None
+    claude_model: str | None = None
+    analysis_sources: dict[str, Any] | None = None
+    deepvue_panel: dict[str, Any] | None = None
+    chart_daily_url: str | None = None
+    chart_weekly_url: str | None = None
+    chart_60m_url: str | None = None
+
+
+class SnapshotResponse(SnapshotCreateRequest):
+    id: int
+    idea_id: UUID
+
+
+class EventCreateRequest(BaseModel):
+    event_type: Literal[
+        "stage_transition", "thesis_updated", "setup_fired", "invalidation",
+        "earnings", "exhaustion_warning", "user_note", "chart_uploaded",
+        "trade_recorded", "promoted_to_model_book",
+    ]
+    payload: dict[str, Any] | None = None
+    summary: str | None = None
+
+
+class EventResponse(BaseModel):
+    id: int
+    idea_id: UUID
+    event_type: str
+    occurred_at: datetime
+    payload: dict[str, Any] | None
+    summary: str | None
+
+
+class ChartCreateRequest(BaseModel):
+    image_url: str
+    thumbnail_url: str | None = None
+    timeframe: Literal["daily", "weekly", "60m", "annotated"]
+    source: Literal["deepvue-auto", "tradingview-upload", "user-markup", "claude-annotated"]
+    annotations: dict[str, Any] | None = None
+    caption: str | None = None
+    # Exactly one must be set (enforced server-side and by DB CHECK):
+    idea_id: UUID | None = None
+    event_id: int | None = None
+    model_book_id: UUID | None = None
+
+
+class ChartResponse(ChartCreateRequest):
+    id: UUID
+    captured_at: datetime
+
+
+class ModelBookCreateRequest(BaseModel):
+    title: str
+    ticker: str
+    setup_kell: str
+    outcome: Literal["winner", "loser", "example", "missed"]
+    entry_date: date | None = None
+    exit_date: date | None = None
+    r_multiple: float | None = None
+    source_idea_id: UUID | None = None
+    ticker_fundamentals: dict[str, Any] | None = None
+    narrative: str | None = None
+    key_takeaways: list[str] | None = None
+    tags: list[str] | None = None
+
+
+class ModelBookPatchRequest(BaseModel):
+    narrative: str | None = None
+    key_takeaways: list[str] | None = None
+    tags: list[str] | None = None
+    outcome: Literal["winner", "loser", "example", "missed"] | None = None
+
+
+class ModelBookResponse(ModelBookCreateRequest):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class PostmarketRunResponse(BaseModel):
+    ran_at: datetime
+    active_ideas_processed: int
+    stage_transitions: int
+    exhaustion_warnings: int
+    stop_violations: int
+    snapshots_written: int
+
+
+class UniverseRefreshResponse(BaseModel):
+    ran_at: datetime
+    skipped: bool
+    skip_reason: str | None = None
+    base_count: int | None = None
+    final_count: int | None = None
+    batch_id: UUID | None = None
