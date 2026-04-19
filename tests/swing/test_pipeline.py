@@ -163,3 +163,31 @@ def test_empty_universe_returns_zeros_and_no_slack(monkeypatch):
     }
     mock_post.assert_not_awaited()
     assert call_count["n"] == 0, "fetch_bars should not be called for empty universe"
+
+
+# ── Test 4: End-to-end detector fires + row inserted ───────────────────────────
+
+def test_detector_fires_inserts_idea_and_calls_slack(monkeypatch):
+    """Integration check: Wedge Pop bars through the pipeline must insert a
+    swing_ideas row and include the hit in the Slack digest call.
+
+    Regression guard — catches detector-signature mismatches like the
+    post_eps_flag fix in commit after 5b3c9c2: if a detector raises, the pipeline's
+    broad per-ticker try/except swallows it and new_ideas stays 0.
+    """
+    sb = FakeSupabaseClient()
+    save_universe_batch(sb, {"AAPL": {}}, source="deepvue-csv")
+
+    wedge_bars = _wedge_pop_bars()
+    qqq_bars = _flat_bars(len(wedge_bars), close=420.0)
+
+    fetcher = _make_test_fetcher({"QQQ": qqq_bars, "AAPL": wedge_bars})
+    mock_post = AsyncMock(return_value=True)
+    monkeypatch.setattr("api.indicators.swing.pipeline.post_premarket_digest", mock_post)
+
+    result = run_premarket_detection(sb, fetch_bars=fetcher)
+
+    assert result["new_ideas"] >= 1, "Wedge Pop should fire and insert at least 1 idea"
+    rows = sb.table("swing_ideas").select("*").execute().data
+    assert any(r["ticker"] == "AAPL" and r["setup_kell"] == "wedge_pop" for r in rows)
+    mock_post.assert_awaited_once()

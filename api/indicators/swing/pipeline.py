@@ -142,7 +142,7 @@ def run_premarket_detection(sb, fetch_bars=None) -> dict:
     market_health = compute_market_health(qqq_bars)
 
     # ── Steps 4–5: Per-ticker detection + transition accumulation ─────────────
-    today_str = date.today().isoformat()
+    today_str = datetime.now(timezone.utc).date().isoformat()
     theme_leaders = _extract_theme_leaders(resolved.extras_by_ticker)
 
     # prior_ideas per ticker (last 30 days window, fetched once per ticker below)

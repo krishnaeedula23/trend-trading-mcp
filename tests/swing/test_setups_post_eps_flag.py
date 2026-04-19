@@ -82,7 +82,7 @@ def _happy_bars(gap_pct: float = 0.07, vol_ratio: float = 0.5, wide_consol: bool
 def test_happy_path_fires():
     """7% gap 5 bars ago, 5 tight bars (<1.5% range), all above 10-EMA, volume 0.5x."""
     bars = _happy_bars(gap_pct=0.07, vol_ratio=0.5)
-    hit = detect(bars, _ctx("NVDA"))
+    hit = detect(bars, bars, _ctx("NVDA"))
 
     assert hit is not None
     assert hit.setup_kell == "post_eps_flag"
@@ -114,7 +114,7 @@ def test_happy_path_fires():
 def test_happy_path_raw_score():
     """Big gap (>8%) and 5+ consolidation bars → score 5."""
     bars = _happy_bars(gap_pct=0.10, vol_ratio=0.5)
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is not None
     assert hit.raw_score == 5  # 3 base + 1 big gap + 1 consol >= 5
 
@@ -122,7 +122,7 @@ def test_happy_path_raw_score():
 def test_happy_path_small_gap_score():
     """7% gap and 5 consolidation bars → score 4 (no big gap bonus, yes consol bonus)."""
     bars = _happy_bars(gap_pct=0.07, vol_ratio=0.5)
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is not None
     assert hit.raw_score == 4  # 3 base + 0 big gap + 1 consol
 
@@ -134,7 +134,7 @@ def test_happy_path_small_gap_score():
 def test_no_gap_returns_none():
     """Flat uptrend bars with no gap-up > 5% → None."""
     bars = synth_bars(closes=[100.0 + i * 0.3 for i in range(40)])
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is None
 
 
@@ -145,7 +145,7 @@ def test_no_gap_returns_none():
 def test_consolidation_too_wide_returns_none():
     """Post-gap daily range ~6% (>4%) → fails tightness check → None."""
     bars = _happy_bars(gap_pct=0.07, vol_ratio=0.5, wide_consol=True)
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is None
 
 
@@ -156,7 +156,7 @@ def test_consolidation_too_wide_returns_none():
 def test_high_volume_returns_none():
     """Current bar volume is 1.2x average → vol_ratio >= 0.8 → None."""
     bars = _happy_bars(gap_pct=0.07, vol_ratio=1.2)
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is None
 
 
@@ -167,7 +167,7 @@ def test_high_volume_returns_none():
 def test_stop_and_target_values():
     """stop_price = min(consol_low, ema10) and first_target = close + consol_height."""
     bars = _happy_bars(gap_pct=0.07, vol_ratio=0.5)
-    hit = detect(bars, _ctx())
+    hit = detect(bars, bars, _ctx())
     assert hit is not None
 
     # stop_price must be below current close
@@ -207,5 +207,5 @@ def test_too_few_consolidation_bars_returns_none():
         "close": all_closes,
         "volume": vol,
     })
-    hit = detect(df, _ctx())
+    hit = detect(df, df, _ctx())
     assert hit is None

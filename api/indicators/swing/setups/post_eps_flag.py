@@ -12,8 +12,13 @@ from api.indicators.swing.setups.base import SetupHit, volume_vs_avg
 logger = logging.getLogger(__name__)
 
 
-def detect(bars: pd.DataFrame, ctx: dict) -> SetupHit | None:
-    """Return SetupHit if Post-EPS Flag Base fires on the current (last) bar, else None."""
+def detect(bars: pd.DataFrame, qqq_bars: pd.DataFrame, ctx: dict) -> SetupHit | None:
+    """Return SetupHit if Post-EPS Flag Base fires on the current (last) bar, else None.
+
+    qqq_bars is accepted for signature parity with the other swing detectors; this
+    setup does not use a benchmark series.
+    """
+    _ = qqq_bars  # unused — kept for detector-signature parity
     ticker = ctx.get("ticker", "UNKNOWN")
     try:
         return _detect(bars, ticker)
