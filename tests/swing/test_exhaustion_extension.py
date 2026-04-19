@@ -60,3 +60,17 @@ def test_missing_base_breakout_idx_skips_kell_count():
     df = _bars(closes)
     flags = detect_exhaustion_extension(df, last_base_breakout_idx=None)
     assert flags.kell_2nd_extension is False
+
+
+def test_climax_bar_excludes_current_bar_from_avg():
+    """Regression: avg_vol must exclude the current (climax) bar.
+    A true 2.0x surge should trigger even though including the bar would dilute the avg.
+    """
+    closes = [100.0] * 40 + [100.0 + i for i in range(20)]     # trending up
+    # 19 prior bars at 1M, the climax bar at exactly 2.0x the prior 20-bar avg (= 2.0M)
+    volumes = [1_000_000] * 59 + [2_000_000]
+    highs = [c * 1.01 for c in closes[:59]] + [closes[-1] * 1.05]  # big upper wick
+    lows = [c * 0.99 for c in closes[:59]] + [closes[-1] * 0.995]
+    df = _bars(closes, volumes=volumes, highs=highs, lows=lows)
+    flags = detect_exhaustion_extension(df, last_base_breakout_idx=40)
+    assert flags.climax_bar is True, "borderline 2.0x climax must trigger (avg must exclude current)"

@@ -67,7 +67,7 @@ def detect_exhaustion_extension(
 
     # Climax bar: volume + upper wick
     last_vol = float(daily["volume"].iloc[-1])
-    avg_vol = float(daily["volume"].tail(20).mean())
+    avg_vol = float(daily["volume"].iloc[-21:-1].mean()) if len(daily) >= 21 else 0.0
     last_high = float(daily["high"].iloc[-1])
     last_low = float(daily["low"].iloc[-1])
     rng = last_high - last_low
