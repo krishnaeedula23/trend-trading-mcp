@@ -62,7 +62,7 @@ class SwingIdea(BaseModel):
     status: str                           # 'active' | 'watching' | 'exited' | 'invalidated'
     detected_at: datetime
     base_thesis: str | None = None
-    thesis_status: str                    # 'pending' | 'generated' | 'refined'
+    thesis_status: str                    # 'pending' | 'ready'
     market_health: dict[str, Any] | None = None
     risk_flags: dict[str, Any]
     detection_evidence: dict[str, Any] | None = None
@@ -81,19 +81,6 @@ class PipelineRunResponse(BaseModel):
     universe_source: str
     universe_size: int
     market_health: dict[str, Any] = {}
-
-
-class SetupHitResponse(BaseModel):
-    """Compact detector output for ad-hoc detection — used in Plan 3."""
-    ticker: str
-    setup_kell: str
-    cycle_stage: str
-    entry_zone: tuple[float, float]
-    stop_price: float
-    first_target: float | None = None
-    second_target: float | None = None
-    detection_evidence: dict[str, Any]
-    raw_score: int
 
 
 # ── Plan 3: Claude-analysis-layer endpoints ─────────────────────────────────
@@ -149,8 +136,14 @@ class TickerFundamentalsResponse(BaseModel):
 
 class TickerDetectResponse(BaseModel):
     ticker: str
-    setups: list[dict]           # serialized SetupHit rows from Plan 2
+    # Each setup is a serialized SetupHit dict PLUS `confluence_score: int` composed
+    # by api.indicators.swing.confluence.score_hits (so ad-hoc /detect output is
+    # comparable with pipeline-scored swing_ideas rows).
+    setups: list[dict]
     fundamentals: dict
+    next_earnings_date: date | None = None
+    beta: float | None = None
+    avg_daily_dollar_volume: float | None = None
     market_health: dict
     data_sufficient: bool        # false if yfinance returned <60 bars
     reason: str | None = None    # populated when data_sufficient=false

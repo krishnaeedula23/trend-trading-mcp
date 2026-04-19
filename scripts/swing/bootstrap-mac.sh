@@ -42,19 +42,45 @@ if ! curl -sf "$BASE/health" >/dev/null; then
 fi
 echo "✓ Railway reachable at $BASE."
 
-# ── Check 4: Bearer auth actually works (POST against the premarket endpoint
-#            with the expected 200 OR the 'insufficient data' shape) ──────
+# ── Check 4: Bearer auth works against a real SWING_API_TOKEN-gated endpoint.
+#            We probe POST /api/swing/ideas/<zero-uuid>/thesis because:
+#              - It's gated by require_swing_token (not _verify_cron_auth, which
+#                reads CRON_SECRET — a different env var).
+#              - The zero UUID won't match any real idea; after auth passes we
+#                get a 404, which proves the happy bearer path reached the route.
 TOKEN="$(head -n1 "$TOKEN_FILE" | tr -d '[:space:]')"
-auth_probe_status=$(
+PROBE_PATH="/api/swing/ideas/00000000-0000-0000-0000-000000000000/thesis"
+PROBE_BODY='{"layer":"base","text":"probe thesis (ignored)","model":"probe"}'
+
+wrong_status=$(
     curl -s -o /dev/null -w '%{http_code}' \
-        -X POST "$BASE/api/swing/pipeline/premarket" \
-        -H "Authorization: Bearer nope-wrong-token" || true
+        -X POST "$BASE$PROBE_PATH" \
+        -H "Authorization: Bearer nope-wrong-token" \
+        -H "Content-Type: application/json" \
+        -d "$PROBE_BODY" || echo "ERR"
 )
-if [[ "$auth_probe_status" != "401" ]]; then
-    echo "✗ Wrong-token probe returned $auth_probe_status (expected 401). Auth layer may be disabled."
+if [[ "$wrong_status" != "401" ]]; then
+    echo "✗ Wrong-token probe returned $wrong_status (expected 401)."
+    echo "  If 500 — SWING_API_TOKEN is not set on Railway."
+    echo "  If 404 — Plan 3 code is not deployed yet (check Railway build)."
     exit 1
 fi
 echo "✓ Auth layer rejects bad tokens (401)."
+
+correct_status=$(
+    curl -s -o /dev/null -w '%{http_code}' \
+        -X POST "$BASE$PROBE_PATH" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$PROBE_BODY" || echo "ERR"
+)
+if [[ "$correct_status" != "404" ]]; then
+    echo "✗ Correct-token probe returned $correct_status (expected 404 for the fake idea ID)."
+    echo "  If 401 — Railway's SWING_API_TOKEN doesn't match $TOKEN_FILE."
+    echo "  If 500 — SWING_API_TOKEN is empty/unset on Railway."
+    exit 1
+fi
+echo "✓ Local token matches Railway's SWING_API_TOKEN (404 on unknown idea as expected)."
 
 # ── Task 11 Step 3: scheduled-tasks MCP registration (manual) ──────────────
 cat <<'EOF'

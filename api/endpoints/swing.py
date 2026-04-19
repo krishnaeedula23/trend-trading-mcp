@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import csv
+import dataclasses
 import io
+import logging
 import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -344,31 +346,55 @@ def get_ticker_fundamentals(ticker: str):
     return TickerFundamentalsResponse(ticker=ticker.upper(), **data)
 
 
-import dataclasses
+logger = logging.getLogger(__name__)
 
 
 class InsufficientData(Exception):
     """Raised when a ticker has < 60 bars of history — not enough for Kell detectors."""
 
 
-def _run_detectors_for_ticker(ticker: str) -> list[dict]:
-    """Run all 5 Plan 2 detectors against a single ticker's daily bars.
+def _compute_market_health_from_bars(qqq_bars):
+    """Return MarketHealth object (with .snapshot) or None if bars insufficient."""
+    from api.indicators.swing.market_health import compute_market_health
+    if qqq_bars is None or qqq_bars.empty or len(qqq_bars) < 20:
+        return None
+    return compute_market_health(qqq_bars)
 
-    Plan 2 exposes detectors individually, not as a single `run_all_detectors_for_ticker`
-    helper, so we compose them here.
+
+def _run_detectors_for_ticker(ticker: str) -> list[dict]:
+    """Run all 5 Plan 2 detectors against a single ticker's daily bars and compose
+    confluence scores. Plan 2 exposes detectors individually, not as a single
+    `run_all_detectors_for_ticker` helper.
     """
+    from api.indicators.common.relative_strength import rs_vs_benchmark
+    from api.indicators.swing.confluence import score_hits
     from api.indicators.swing.setups.wedge_pop import detect as detect_wedge_pop
     from api.indicators.swing.setups.ema_crossback import detect as detect_ema_crossback
     from api.indicators.swing.setups.base_n_break import detect as detect_base_n_break
     from api.indicators.swing.setups.reversal_extension import detect as detect_reversal_extension
     from api.indicators.swing.setups.post_eps_flag import detect as detect_post_eps_flag
+    import pandas as pd
 
     daily = svc.fetch_bars(ticker, "daily", lookback=250)
     if len(daily) < 60:
         raise InsufficientData(f"only {len(daily)} daily bars")
     qqq = svc.fetch_bars("QQQ", "daily", lookback=250)
-    ctx = {"ticker": ticker, "universe_extras": {}, "prior_ideas": [],
-           "today": datetime.now(timezone.utc).date(), "rs_10d": 0.0, "theme_leaders": []}
+
+    # Real 10-day RS vs QQQ (not hardcoded 0.0) — feeds the confluence rs_bonus.
+    try:
+        rs_series = rs_vs_benchmark(daily, qqq, 10)
+        rs_10d = float(rs_series.iloc[-1]) if len(rs_series) else 0.0
+        if pd.isna(rs_10d):
+            rs_10d = 0.0
+    except Exception as exc:
+        logger.warning("rs_vs_benchmark failed for %s: %s", ticker, exc)
+        rs_10d = 0.0
+
+    ctx = {
+        "ticker": ticker, "universe_extras": {}, "prior_ideas": [],
+        "today": datetime.now(timezone.utc).date(), "rs_10d": rs_10d,
+        "theme_leaders": [],
+    }
 
     detectors = [
         detect_wedge_pop, detect_ema_crossback, detect_base_n_break,
@@ -380,21 +406,49 @@ def _run_detectors_for_ticker(ticker: str) -> list[dict]:
             hit = d(daily, qqq, ctx)
             if hit is not None:
                 hits.append(hit)
-        except Exception:
-            # Per-detector failures are swallowed — the detect endpoint is best-effort.
-            pass
+        except Exception as exc:
+            logger.warning("detector %s failed for %s: %s", d.__module__, ticker, exc)
 
-    return [dataclasses.asdict(h) if dataclasses.is_dataclass(h) else dict(h) for h in hits]
+    if not hits:
+        return []
+
+    # Compose confluence score so ad-hoc /detect output is comparable to
+    # pipeline-scored swing_ideas rows. Market-health gate feeds the market_bonus;
+    # on QQQ data loss we fall back to a neutral (green_light=False) snapshot.
+    mh = _compute_market_health_from_bars(qqq)
+    if mh is None:
+        class _NeutralHealth:
+            green_light = False
+            snapshot: dict = {}
+        mh = _NeutralHealth()
+    scored = score_hits(hits, ticker, ctx, mh)
+
+    out: list[dict] = []
+    for hit, conf in scored:
+        row = dataclasses.asdict(hit) if dataclasses.is_dataclass(hit) else dict(hit)
+        row["confluence_score"] = conf
+        out.append(row)
+    return out
 
 
 def _ticker_health_snapshot() -> dict:
-    """QQQ-based market health (Plan 2 snapshot dict)."""
-    from api.indicators.swing.market_health import compute_market_health
-    qqq = svc.fetch_bars("QQQ", "daily", lookback=60)
-    if qqq.empty or len(qqq) < 20:
+    """QQQ-based market health snapshot dict, or {} if QQQ data is missing."""
+    try:
+        qqq = svc.fetch_bars("QQQ", "daily", lookback=60)
+    except Exception as exc:
+        logger.warning("fetch_bars(QQQ) failed: %s", exc)
         return {}
-    mh = compute_market_health(qqq)
-    return mh.snapshot
+    mh = _compute_market_health_from_bars(qqq)
+    return mh.snapshot if mh is not None else {}
+
+
+def _safe_fetch_fundamentals(ticker: str) -> dict:
+    """Guarded wrapper — yfinance failures return an empty-shaped dict."""
+    try:
+        return svc.fetch_fundamentals(ticker)
+    except Exception as exc:
+        logger.warning("fetch_fundamentals(%s) failed: %s", ticker, exc)
+        return {"fundamentals": {}, "next_earnings_date": None, "beta": None, "avg_daily_dollar_volume": None}
 
 
 @router.post("/ticker/{ticker}/detect", response_model=TickerDetectResponse,
@@ -404,16 +458,22 @@ def detect_for_ticker(ticker: str):
     try:
         setups = _run_detectors_for_ticker(ticker)
     except InsufficientData as e:
-        fund = svc.fetch_fundamentals(ticker)
+        fund = _safe_fetch_fundamentals(ticker)
         return TickerDetectResponse(
             ticker=ticker, setups=[], fundamentals=fund.get("fundamentals") or {},
+            next_earnings_date=fund.get("next_earnings_date"),
+            beta=fund.get("beta"),
+            avg_daily_dollar_volume=fund.get("avg_daily_dollar_volume"),
             market_health={}, data_sufficient=False, reason=str(e),
         )
-    fund = svc.fetch_fundamentals(ticker)
+    fund = _safe_fetch_fundamentals(ticker)
     return TickerDetectResponse(
         ticker=ticker,
         setups=setups,
         fundamentals=fund.get("fundamentals") or {},
+        next_earnings_date=fund.get("next_earnings_date"),
+        beta=fund.get("beta"),
+        avg_daily_dollar_volume=fund.get("avg_daily_dollar_volume"),
         market_health=_ticker_health_snapshot(),
         data_sufficient=True,
     )

@@ -574,7 +574,7 @@ export interface SwingIdea {
   status: "active" | "watching" | "exited" | "invalidated"
   detected_at: string
   base_thesis: string | null
-  thesis_status: "pending" | "generated" | "refined"
+  thesis_status: "pending" | "ready"
   market_health: Record<string, unknown> | null
   risk_flags: Record<string, unknown>
   detection_evidence: Record<string, unknown> | null
