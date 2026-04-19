@@ -1,6 +1,6 @@
 -- Migration: 017_add_swing_detection_evidence
 -- Depends on: 016_add_swing_tables
--- Applied: <PENDING — apply via Supabase MCP after review>
+-- Applied: 2026-04-18 via Supabase MCP apply_migration (project: pmjufbiagokrrcxnhmah)
 -- Spec: docs/superpowers/specs/2026-04-18-kell-saty-swing-system-design.md Section 8
 --
 -- Adds the per-detector evidence blob to swing_ideas so Plan 3 thesis generation
