@@ -584,3 +584,41 @@ export interface SwingIdeaListResponse {
   ideas: SwingIdea[]
   total: number
 }
+
+// ---------------------------------------------------------------------------
+// Swing Trading — Idea Detail (Plan 3)
+// ---------------------------------------------------------------------------
+
+export type SwingThesisLayer = "base" | "deep"
+
+export interface SwingThesis {
+  text: string
+  layer: SwingThesisLayer
+  model: string
+  updated_at: string
+  sources?: string[]
+}
+
+export interface SwingEvent {
+  id: number
+  idea_id: string
+  event_type: string
+  occurred_at: string
+  payload?: Record<string, unknown> | null
+  summary?: string | null
+}
+
+// Detail type extends Plan 2's SwingIdea with fields the detail page needs.
+// Plan 2's /ideas/{id} response returns SwingIdea's fields; extras are optional.
+export interface SwingIdeaDetail extends SwingIdea {
+  // All these may not be set by Plan 2's endpoint; the UI handles nulls.
+  direction?: "long" | "short"
+  setup_saty?: string | null
+  base_thesis_at?: string | null
+  deep_thesis?: string | null
+  deep_thesis_at?: string | null
+  deep_thesis_sources?: string[] | null
+  next_earnings_date?: string | null
+  // Events come in via a separate endpoint (Plan 4). For Plan 3, always [].
+  events?: SwingEvent[]
+}
