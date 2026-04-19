@@ -7,17 +7,20 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Header
 from supabase import Client, create_client
 
 from api.indicators.swing.universe.resolver import (
     resolve_universe,
     save_universe_batch,
 )
+from api.endpoints.swing_auth import require_swing_token, idempotent
 from api.schemas.swing import (
     PipelineRunResponse,
     SwingIdea,
     SwingIdeaListResponse,
+    ThesisWriteRequest,
+    ThesisWriteResponse,
     UniverseAddSingleRequest,
     UniverseHistoryEntry,
     UniverseHistoryResponse,
@@ -231,3 +234,43 @@ def run_premarket(authorization: str | None = Header(default=None)):
     sb = _get_supabase()
     result = run_premarket_detection(sb)
     return PipelineRunResponse(**result)
+
+
+@router.post("/ideas/{idea_id}/thesis", response_model=ThesisWriteResponse,
+             dependencies=[Depends(require_swing_token)])
+def write_thesis(
+    idea_id: UUID,
+    req: ThesisWriteRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    sb = _get_supabase()
+    idea = sb.table("swing_ideas").select("id").eq("id", str(idea_id)).execute().data or []
+    if not idea:
+        raise HTTPException(status_code=404, detail=f"idea {idea_id} not found")
+
+    def _do() -> dict:
+        now = datetime.now(timezone.utc).isoformat()
+        patch: dict = {}
+        if req.layer == "base":
+            patch = {
+                "base_thesis": req.text,
+                "base_thesis_at": now,
+                "thesis_status": "ready",
+            }
+        else:  # deep
+            patch = {
+                "deep_thesis": req.text,
+                "deep_thesis_at": now,
+                "deep_thesis_sources": req.sources,
+            }
+        sb.table("swing_ideas").update(patch).eq("id", str(idea_id)).execute()
+        sb.table("swing_events").insert({
+            "idea_id": str(idea_id),
+            "event_type": "thesis_updated",
+            "occurred_at": now,
+            "payload": {"layer": req.layer, "model": req.model},
+            "summary": f"{req.layer} thesis updated",
+        }).execute()
+        return {"idea_id": str(idea_id), "layer": req.layer, "updated_at": now}
+
+    return idempotent(sb, idempotency_key, f"/ideas/{idea_id}/thesis", _do)
