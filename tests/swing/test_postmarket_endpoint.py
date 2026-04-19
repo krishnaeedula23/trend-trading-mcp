@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 from unittest.mock import patch
-import pytest
 
 from api.main import app
 from tests.fixtures.swing_fixtures import FakeSupabaseClient
@@ -9,10 +8,19 @@ from tests.fixtures.swing_fixtures import FakeSupabaseClient
 @patch("api.endpoints.swing_postmarket._get_supabase")
 @patch("api.endpoints.swing_postmarket.run_swing_postmarket_snapshot")
 def test_postmarket_endpoint_requires_bearer(mock_run, mock_sb, monkeypatch):
-    monkeypatch.setenv("SWING_API_TOKEN", "secret")
+    monkeypatch.setenv("CRON_SECRET", "secret")
     client = TestClient(app)
     r = client.post("/api/swing/pipeline/postmarket")
-    assert r.status_code in (401, 403)
+    assert r.status_code == 401
+
+
+@patch("api.endpoints.swing_postmarket._get_supabase")
+@patch("api.endpoints.swing_postmarket.run_swing_postmarket_snapshot")
+def test_postmarket_endpoint_rejects_wrong_token(mock_run, mock_sb, monkeypatch):
+    monkeypatch.setenv("CRON_SECRET", "secret")
+    client = TestClient(app)
+    r = client.post("/api/swing/pipeline/postmarket", headers={"Authorization": "Bearer wrong"})
+    assert r.status_code == 401
 
 
 @patch("api.endpoints.swing_postmarket._get_supabase")
@@ -20,7 +28,7 @@ def test_postmarket_endpoint_requires_bearer(mock_run, mock_sb, monkeypatch):
 def test_postmarket_endpoint_runs_pipeline(mock_run, mock_sb, monkeypatch):
     from datetime import datetime, timezone
     from api.indicators.swing.pipeline.postmarket import PostmarketResult
-    monkeypatch.setenv("SWING_API_TOKEN", "secret")
+    monkeypatch.setenv("CRON_SECRET", "secret")
 
     mock_sb.return_value = FakeSupabaseClient()
     mock_run.return_value = PostmarketResult(
