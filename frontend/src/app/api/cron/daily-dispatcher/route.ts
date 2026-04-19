@@ -44,8 +44,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (utcHour === 21) {
-    // Post-market slot: market-monitor
+    // Post-market slot: swing postmarket + market-monitor
     const results: Record<string, unknown> = { dispatched: "postmarket", utc_hour: utcHour }
+    try {
+      const swingRes = await railwayFetch("/api/swing/pipeline/postmarket", undefined, { authToken: cronSecret })
+      results.swing_postmarket = await swingRes.json()
+    } catch (err) {
+      results.swing_postmarket = { error: String(err) }
+    }
     try {
       const mmRes = await railwayFetch("/api/market-monitor/compute")
       results.market_monitor = await mmRes.json()

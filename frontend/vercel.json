@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-dispatcher",
       "schedule": "0 13,21 * * 1-5"
+    },
+    {
+      "path": "/api/cron/weekend-refresh",
+      "schedule": "30 23 * * 0"
     }
   ]
 }

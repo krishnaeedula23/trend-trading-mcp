@@ -1,0 +1,21 @@
+import { NextRequest, NextResponse } from "next/server"
+
+function getBaseUrl(): string {
+  const url = process.env.RAILWAY_API_URL
+  if (!url) throw new Error("RAILWAY_API_URL not set")
+  return url.replace(/\/+$/, "")
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json()
+  const response = await fetch(`${getBaseUrl()}/api/swing/charts`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.SWING_API_TOKEN ?? ""}`,
+    },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => ({ error: "invalid response" }))
+  return NextResponse.json(data, { status: response.status })
+}

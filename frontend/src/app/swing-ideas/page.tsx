@@ -1,18 +1,12 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UniverseManager } from "@/components/swing/universe-manager"
 import { IdeasList } from "@/components/swing/ideas-list"
 import { MarketHealthBar } from "@/components/swing/market-health-bar"
-
-function ComingSoon({ name }: { name: string }) {
-  return (
-    <div className="rounded-lg border border-border/50 bg-card/30 p-8 text-center">
-      <p className="text-sm text-muted-foreground">{name} — coming in a later plan</p>
-    </div>
-  )
-}
+import { ExitedList } from "@/components/swing/exited-list"
+import { ModelBookGrid } from "@/components/swing/model-book-grid"
+import { WeeklyList } from "@/components/swing/weekly-list"
 
 export default function SwingIdeasPage() {
   return (
@@ -28,18 +22,18 @@ export default function SwingIdeasPage() {
         <TabsList>
           <TabsTrigger value="active">Active</TabsTrigger>
           <TabsTrigger value="watching">Watching</TabsTrigger>
-          <TabsTrigger value="exited" disabled>Exited <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
+          <TabsTrigger value="exited">Exited</TabsTrigger>
           <TabsTrigger value="universe">Universe</TabsTrigger>
-          <TabsTrigger value="model-book" disabled>Model Book <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
-          <TabsTrigger value="weekly" disabled>Weekly <Badge variant="outline" className="ml-1 text-[9px]">Plan 4</Badge></TabsTrigger>
+          <TabsTrigger value="model-book">Model Book</TabsTrigger>
+          <TabsTrigger value="weekly">Weekly</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active"><IdeasList status="active" /></TabsContent>
         <TabsContent value="watching"><IdeasList status="watching" /></TabsContent>
-        <TabsContent value="exited"><ComingSoon name="Exited" /></TabsContent>
+        <TabsContent value="exited"><ExitedList /></TabsContent>
         <TabsContent value="universe"><UniverseManager /></TabsContent>
-        <TabsContent value="model-book"><ComingSoon name="Model Book" /></TabsContent>
-        <TabsContent value="weekly"><ComingSoon name="Weekly Synthesis" /></TabsContent>
+        <TabsContent value="model-book"><ModelBookGrid /></TabsContent>
+        <TabsContent value="weekly"><WeeklyList /></TabsContent>
       </Tabs>
     </div>
   )

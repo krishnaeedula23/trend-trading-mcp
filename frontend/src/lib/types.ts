@@ -622,3 +622,64 @@ export interface SwingIdeaDetail extends SwingIdea {
   // Events come in via a separate endpoint (Plan 4). For Plan 3, always [].
   events?: SwingEvent[]
 }
+
+// ───────── Plan 4 additions ─────────
+
+export type SwingSnapshot = {
+  id: number
+  idea_id: string
+  snapshot_date: string
+  snapshot_type: "daily" | "weekly"
+  daily_close: number | null
+  ema_10: number | null
+  ema_20: number | null
+  sma_50: number | null
+  sma_200: number | null
+  kell_stage: string | null
+  claude_analysis: string | null
+  chart_daily_url: string | null
+  chart_weekly_url: string | null
+  chart_60m_url: string | null
+}
+
+export type SwingChart = {
+  id: string
+  idea_id: string | null
+  event_id: number | null
+  model_book_id: string | null
+  image_url: string
+  thumbnail_url: string | null
+  timeframe: string   // backend may evolve; gallery filters string-compared anyway
+  source: "deepvue-auto" | "tradingview-upload" | "user-markup" | "claude-annotated"
+  annotations: Record<string, unknown> | null
+  caption: string | null
+  captured_at: string
+}
+
+export type SwingModelBookEntry = {
+  id: string
+  title: string
+  ticker: string
+  setup_kell: string
+  outcome: "winner" | "loser" | "example" | "missed"
+  entry_date: string | null
+  exit_date: string | null
+  r_multiple: number | null
+  source_idea_id: string | null
+  narrative: string | null
+  key_takeaways: string[] | null
+  tags: string[] | null
+  created_at: string
+  updated_at: string
+}
+
+export type SwingWeekGroup = {
+  week_of: string
+  entries: Array<{
+    idea_id: string
+    ticker: string
+    cycle_stage: string | null
+    status: string
+    claude_analysis: string | null
+  }>
+}
