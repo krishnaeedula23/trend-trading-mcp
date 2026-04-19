@@ -21,7 +21,7 @@ export default function SwingIdeaDetailPage({
     <div className="max-w-4xl mx-auto p-6 space-y-4">
       <IdeaHeader idea={idea} />
       <ThesisPanel idea={idea} />
-      <IdeaTimeline events={idea.events ?? []} />
+      <IdeaTimeline ideaId={id} />
       {/* Plan 4 adds: ChartsGallery, FundamentalsPanel, ModelBookPromote */}
     </div>
   )
