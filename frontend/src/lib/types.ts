@@ -649,7 +649,7 @@ export type SwingChart = {
   model_book_id: string | null
   image_url: string
   thumbnail_url: string | null
-  timeframe: "daily" | "weekly" | "60m" | "annotated"
+  timeframe: string   // backend may evolve; gallery filters string-compared anyway
   source: "deepvue-auto" | "tradingview-upload" | "user-markup" | "claude-annotated"
   annotations: Record<string, unknown> | null
   caption: string | null

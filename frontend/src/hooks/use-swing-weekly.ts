@@ -1,10 +1,9 @@
 "use client"
 import useSWR from "swr"
 import type { SwingWeekGroup } from "@/lib/types"
-
-const fetcher = (u: string) => fetch(u).then(r => r.json() as Promise<SwingWeekGroup[]>)
+import { jsonFetcher } from "@/lib/swr-fetcher"
 
 export function useSwingWeekly() {
-  const { data, isLoading, error, mutate } = useSWR<SwingWeekGroup[]>("/api/swing/weekly", fetcher)
+  const { data, isLoading, error, mutate } = useSWR<SwingWeekGroup[]>("/api/swing/weekly", jsonFetcher)
   return { weeks: data ?? [], isLoading, error, mutate }
 }

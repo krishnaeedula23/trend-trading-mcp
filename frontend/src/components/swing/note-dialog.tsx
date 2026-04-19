@@ -20,7 +20,7 @@ export function NoteDialog({ ideaId, onSaved }: { ideaId: string; onSaved?: () =
       })
       if (!r.ok) {
         const body = await r.json().catch(() => ({}))
-        throw new Error(body.detail ?? "failed")
+        throw new Error(body.detail ?? body.error ?? "failed")
       }
       toast.success("Note added")
       setOpen(false)

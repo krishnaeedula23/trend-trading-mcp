@@ -4,14 +4,16 @@ import { useSwingIdeas } from "@/hooks/use-swing-ideas"
 import { PromoteModelBookDialog } from "./promote-model-book-dialog"
 
 export function ExitedList() {
-  const { ideas: exited, loading: loadA } = useSwingIdeas("exited")
-  const { ideas: invalidated, loading: loadB } = useSwingIdeas("invalidated")
+  const { ideas: exited, loading: loadA, error: errA } = useSwingIdeas("exited")
+  const { ideas: invalidated, loading: loadB, error: errB } = useSwingIdeas("invalidated")
   const isLoading = loadA || loadB
+  const err = errA ?? errB
   const ideas = [...exited, ...invalidated].sort(
     (a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime(),
   )
 
   if (isLoading && ideas.length === 0) return <div className="text-muted-foreground">Loading…</div>
+  if (err) return <div className="text-destructive text-sm" role="alert">Failed to load: {err}</div>
   if (!ideas.length) return <div className="text-muted-foreground">No exited or invalidated ideas yet.</div>
 
   return (

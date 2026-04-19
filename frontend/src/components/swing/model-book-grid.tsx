@@ -6,7 +6,7 @@ import { ModelBookCard } from "./model-book-card"
 export function ModelBookGrid() {
   const [setup, setSetup] = useState<string>("")
   const [outcome, setOutcome] = useState<string>("")
-  const { entries, isLoading } = useSwingModelBook({
+  const { entries, isLoading, error } = useSwingModelBook({
     setup_kell: setup || undefined,
     outcome: outcome || undefined,
   })
@@ -40,6 +40,8 @@ export function ModelBookGrid() {
       </div>
       {isLoading ? (
         <div className="text-muted-foreground">Loading…</div>
+      ) : error ? (
+        <div className="text-destructive text-sm" role="alert">Failed to load Model Book: {error.message}</div>
       ) : entries.length === 0 ? (
         <div className="text-muted-foreground">No entries yet.</div>
       ) : (

@@ -40,7 +40,7 @@ export function ChartUploadDropzone({ ideaId, eventId, modelBookId, onUploaded }
       })
       if (!r.ok) {
         const body = await r.json().catch(() => ({}))
-        throw new Error(body.detail ?? "upload failed")
+        throw new Error(body.detail ?? body.error ?? "upload failed")
       }
       toast.success("Chart uploaded")
       onUploaded?.()

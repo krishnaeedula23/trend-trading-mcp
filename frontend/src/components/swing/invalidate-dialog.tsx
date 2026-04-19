@@ -25,9 +25,9 @@ export function InvalidateDialog({ idea, onSaved }: { idea: SwingIdea; onSaved?:
       })
       if (!r.ok) {
         const body = await r.json().catch(() => ({}))
-        throw new Error(body.detail ?? "failed")
+        throw new Error(body.detail ?? body.error ?? "failed")
       }
-      toast.success("Invalidation logged")
+      toast.success("Invalidation note saved")
       setOpen(false)
       setReason("")
       onSaved?.()
@@ -41,13 +41,13 @@ export function InvalidateDialog({ idea, onSaved }: { idea: SwingIdea; onSaved?:
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive">Mark Invalidated</Button>
+        <Button variant="destructive">Log Invalidation Note</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Mark {idea.ticker} invalidated</DialogTitle>
+          <DialogTitle>Log invalidation note for {idea.ticker}</DialogTitle>
           <DialogDescription>
-            Records an invalidation event in the timeline. The idea&apos;s status is updated by the post-market pipeline when a stop is violated.
+            Logs an invalidation event in the timeline. The idea&apos;s status is flipped to &apos;invalidated&apos; only by the post-market pipeline when a stop is violated.
           </DialogDescription>
         </DialogHeader>
         <Textarea
@@ -56,7 +56,7 @@ export function InvalidateDialog({ idea, onSaved }: { idea: SwingIdea; onSaved?:
           placeholder="Why is this idea invalid? (thesis broken, stop hit, etc.)"
           rows={4}
         />
-        <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Mark Invalidated"}</Button>
+        <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save Note"}</Button>
       </DialogContent>
     </Dialog>
   )

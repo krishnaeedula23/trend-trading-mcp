@@ -1,13 +1,12 @@
 "use client"
 import useSWR from "swr"
 import type { SwingChart } from "@/lib/types"
-
-const fetcher = (u: string) => fetch(u).then(r => r.json() as Promise<SwingChart[]>)
+import { jsonFetcher } from "@/lib/swr-fetcher"
 
 export function useSwingCharts(ideaId: string | null) {
   const { data, isLoading, error, mutate } = useSWR<SwingChart[]>(
     ideaId ? `/api/swing/ideas/${ideaId}/charts` : null,
-    fetcher,
+    jsonFetcher,
   )
   return { charts: data ?? [], isLoading, error, mutate }
 }
@@ -15,7 +14,7 @@ export function useSwingCharts(ideaId: string | null) {
 export function useSwingModelBookCharts(modelBookId: string | null) {
   const { data, isLoading, error, mutate } = useSWR<SwingChart[]>(
     modelBookId ? `/api/swing/model-book/${modelBookId}/charts` : null,
-    fetcher,
+    jsonFetcher,
   )
   return { charts: data ?? [], isLoading, error, mutate }
 }

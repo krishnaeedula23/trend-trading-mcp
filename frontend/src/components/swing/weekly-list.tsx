@@ -2,8 +2,9 @@
 import { useSwingWeekly } from "@/hooks/use-swing-weekly"
 
 export function WeeklyList() {
-  const { weeks, isLoading } = useSwingWeekly()
+  const { weeks, isLoading, error } = useSwingWeekly()
   if (isLoading) return <div className="text-muted-foreground">Loading…</div>
+  if (error) return <div className="text-destructive text-sm" role="alert">Failed to load weekly syntheses: {error.message}</div>
   if (!weeks.length) return <div className="text-muted-foreground">No weekly syntheses yet.</div>
 
   return (

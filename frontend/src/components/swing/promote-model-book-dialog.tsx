@@ -33,7 +33,7 @@ export function PromoteModelBookDialog({ idea, onSaved }: { idea: SwingIdea; onS
       })
       if (!r.ok) {
         const body = await r.json().catch(() => ({}))
-        throw new Error(body.detail ?? "failed")
+        throw new Error(body.detail ?? body.error ?? "failed")
       }
       toast.success("Added to Model Book")
       setOpen(false)

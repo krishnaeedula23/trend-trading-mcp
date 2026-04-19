@@ -14,16 +14,15 @@ function chartMatchesTab(c: SwingChart, tab: TF): boolean {
   return c.timeframe === tab
 }
 
-export function ChartGallery({
-  ideaId,
-  modelBookId,
-}: {
-  ideaId?: string
-  modelBookId?: string
-}) {
+type ChartGalleryProps =
+  | { ideaId: string; modelBookId?: never }
+  | { modelBookId: string; ideaId?: never }
+
+export function ChartGallery(props: ChartGalleryProps) {
+  const { ideaId, modelBookId } = props as { ideaId?: string; modelBookId?: string }
   const ideaHook = useSwingCharts(ideaId ?? null)
   const modelBookHook = useSwingModelBookCharts(modelBookId ?? null)
-  const { charts, mutate } = modelBookId ? modelBookHook : ideaHook
+  const { charts, mutate, error } = modelBookId ? modelBookHook : ideaHook
   const [lightbox, setLightbox] = useState<SwingChart | null>(null)
 
   return (
@@ -31,31 +30,36 @@ export function ChartGallery({
       {ideaId && (
         <ChartUploadDropzone ideaId={ideaId} onUploaded={() => mutate()} />
       )}
-      <Tabs defaultValue="daily">
-        <TabsList>{TFS.map(t => <TabsTrigger key={t} value={t}>{t}</TabsTrigger>)}</TabsList>
-        {TFS.map(tab => (
-          <TabsContent key={tab} value={tab}>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {charts.filter(c => chartMatchesTab(c, tab)).map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setLightbox(c)}
-                  className="overflow-hidden rounded border"
-                  type="button"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={c.thumbnail_url ?? c.image_url}
-                    alt={c.caption ?? c.timeframe}
-                    className="h-auto w-full"
-                  />
-                  {c.caption && <div className="p-1 text-xs text-muted-foreground">{c.caption}</div>}
-                </button>
-              ))}
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+      {error && (
+        <div className="text-destructive text-sm" role="alert">Failed to load charts: {error.message}</div>
+      )}
+      {!error && (
+        <Tabs defaultValue="daily">
+          <TabsList>{TFS.map(t => <TabsTrigger key={t} value={t}>{t}</TabsTrigger>)}</TabsList>
+          {TFS.map(tab => (
+            <TabsContent key={tab} value={tab}>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                {charts.filter(c => chartMatchesTab(c, tab)).map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setLightbox(c)}
+                    className="overflow-hidden rounded border"
+                    type="button"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={c.thumbnail_url ?? c.image_url}
+                      alt={c.caption ?? c.timeframe}
+                      className="h-auto w-full"
+                    />
+                    {c.caption && <div className="p-1 text-xs text-muted-foreground">{c.caption}</div>}
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
       {lightbox && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"

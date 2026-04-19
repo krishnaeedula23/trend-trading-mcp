@@ -31,8 +31,9 @@ function relativeTime(iso: string): string {
 }
 
 export function IdeaTimeline({ ideaId }: { ideaId: string }) {
-  const { events, isLoading } = useSwingEvents(ideaId)
+  const { events, isLoading, error } = useSwingEvents(ideaId)
   if (isLoading) return <div className="text-muted-foreground">Loading timeline…</div>
+  if (error) return <div className="text-destructive text-sm" role="alert">Failed to load timeline: {error.message}</div>
   if (!events.length) return <div className="text-muted-foreground">No events yet.</div>
 
   return (
