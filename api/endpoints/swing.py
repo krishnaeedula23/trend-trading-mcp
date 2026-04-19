@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Header
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Header
 from supabase import Client, create_client
 
 from api.indicators.swing.universe.resolver import (
@@ -15,6 +15,7 @@ from api.indicators.swing.universe.resolver import (
     save_universe_batch,
 )
 from api.endpoints.swing_auth import require_swing_token, idempotent
+from api.endpoints import swing_ticker_service as svc
 from api.schemas.swing import (
     EventWriteRequest,
     EventWriteResponse,
@@ -23,6 +24,9 @@ from api.schemas.swing import (
     SwingIdeaListResponse,
     ThesisWriteRequest,
     ThesisWriteResponse,
+    TickerBarEntry,
+    TickerBarsResponse,
+    TickerFundamentalsResponse,
     UniverseAddSingleRequest,
     UniverseHistoryEntry,
     UniverseHistoryResponse,
@@ -306,3 +310,25 @@ def write_event(
         }
 
     return idempotent(sb, idempotency_key, f"/ideas/{idea_id}/events", _do)
+
+
+@router.get("/ticker/{ticker}/bars", response_model=TickerBarsResponse)
+def get_ticker_bars(
+    ticker: str,
+    tf: str = Query(..., pattern="^(daily|weekly|60m)$"),
+    lookback: int = Query(90, ge=5, le=1000),
+):
+    df = svc.fetch_bars(ticker.upper(), tf, lookback)
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"No bars for {ticker}")
+    return TickerBarsResponse(
+        ticker=ticker.upper(),
+        tf=tf,
+        bars=[TickerBarEntry(**r) for r in df.to_dict(orient="records")],
+    )
+
+
+@router.get("/ticker/{ticker}/fundamentals", response_model=TickerFundamentalsResponse)
+def get_ticker_fundamentals(ticker: str):
+    data = svc.fetch_fundamentals(ticker.upper())
+    return TickerFundamentalsResponse(ticker=ticker.upper(), **data)
