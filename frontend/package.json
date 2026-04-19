@@ -16,6 +16,7 @@
     "@ai-sdk/react": "^3.0.109",
     "@supabase/supabase-js": "^2.97.0",
     "@tanstack/react-table": "^8.21.3",
+    "@vercel/blob": "^2.3.3",
     "ai": "^6.0.107",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
