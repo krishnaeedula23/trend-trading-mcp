@@ -26,6 +26,7 @@ from api.schemas.swing import (
     ThesisWriteResponse,
     TickerBarEntry,
     TickerBarsResponse,
+    TickerDetectResponse,
     TickerFundamentalsResponse,
     UniverseAddSingleRequest,
     UniverseHistoryEntry,
@@ -332,3 +333,78 @@ def get_ticker_bars(
 def get_ticker_fundamentals(ticker: str):
     data = svc.fetch_fundamentals(ticker.upper())
     return TickerFundamentalsResponse(ticker=ticker.upper(), **data)
+
+
+import dataclasses
+
+
+class InsufficientData(Exception):
+    """Raised when a ticker has < 60 bars of history — not enough for Kell detectors."""
+
+
+def _run_detectors_for_ticker(ticker: str) -> list[dict]:
+    """Run all 5 Plan 2 detectors against a single ticker's daily bars.
+
+    Plan 2 exposes detectors individually, not as a single `run_all_detectors_for_ticker`
+    helper, so we compose them here.
+    """
+    from api.indicators.swing.setups.wedge_pop import detect as detect_wedge_pop
+    from api.indicators.swing.setups.ema_crossback import detect as detect_ema_crossback
+    from api.indicators.swing.setups.base_n_break import detect as detect_base_n_break
+    from api.indicators.swing.setups.reversal_extension import detect as detect_reversal_extension
+    from api.indicators.swing.setups.post_eps_flag import detect as detect_post_eps_flag
+
+    daily = svc.fetch_bars(ticker, "daily", lookback=250)
+    if len(daily) < 60:
+        raise InsufficientData(f"only {len(daily)} daily bars")
+    qqq = svc.fetch_bars("QQQ", "daily", lookback=250)
+    ctx = {"ticker": ticker, "universe_extras": {}, "prior_ideas": [],
+           "today": datetime.now(timezone.utc).date(), "rs_10d": 0.0, "theme_leaders": []}
+
+    detectors = [
+        detect_wedge_pop, detect_ema_crossback, detect_base_n_break,
+        detect_reversal_extension, detect_post_eps_flag,
+    ]
+    hits: list = []
+    for d in detectors:
+        try:
+            hit = d(daily, qqq, ctx)
+            if hit is not None:
+                hits.append(hit)
+        except Exception:
+            # Per-detector failures are swallowed — the detect endpoint is best-effort.
+            pass
+
+    return [dataclasses.asdict(h) if dataclasses.is_dataclass(h) else dict(h) for h in hits]
+
+
+def _ticker_health_snapshot() -> dict:
+    """QQQ-based market health (Plan 2 snapshot dict)."""
+    from api.indicators.swing.market_health import compute_market_health
+    qqq = svc.fetch_bars("QQQ", "daily", lookback=60)
+    if qqq.empty or len(qqq) < 20:
+        return {}
+    mh = compute_market_health(qqq)
+    return mh.snapshot
+
+
+@router.post("/ticker/{ticker}/detect", response_model=TickerDetectResponse,
+             dependencies=[Depends(require_swing_token)])
+def detect_for_ticker(ticker: str):
+    ticker = ticker.upper()
+    try:
+        setups = _run_detectors_for_ticker(ticker)
+    except InsufficientData as e:
+        fund = svc.fetch_fundamentals(ticker)
+        return TickerDetectResponse(
+            ticker=ticker, setups=[], fundamentals=fund.get("fundamentals") or {},
+            market_health={}, data_sufficient=False, reason=str(e),
+        )
+    fund = svc.fetch_fundamentals(ticker)
+    return TickerDetectResponse(
+        ticker=ticker,
+        setups=setups,
+        fundamentals=fund.get("fundamentals") or {},
+        market_health=_ticker_health_snapshot(),
+        data_sufficient=True,
+    )
