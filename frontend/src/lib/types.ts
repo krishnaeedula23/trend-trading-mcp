@@ -631,12 +631,22 @@ export type SwingSnapshot = {
   snapshot_date: string
   snapshot_type: "daily" | "weekly"
   daily_close: number | null
+  daily_high: number | null
+  daily_low: number | null
+  daily_volume: number | null
   ema_10: number | null
   ema_20: number | null
   sma_50: number | null
   sma_200: number | null
+  weekly_ema_10: number | null
+  rs_vs_qqq_20d: number | null
+  phase_osc_value: number | null
   kell_stage: string | null
+  saty_setups_active: string[] | null
   claude_analysis: string | null
+  claude_model: string | null
+  analysis_sources: Record<string, unknown> | null
+  deepvue_panel: Record<string, unknown> | null
   chart_daily_url: string | null
   chart_weekly_url: string | null
   chart_60m_url: string | null

@@ -19,16 +19,16 @@ type ChartGalleryProps =
   | { modelBookId: string; ideaId?: never }
 
 export function ChartGallery(props: ChartGalleryProps) {
-  const { ideaId, modelBookId } = props as { ideaId?: string; modelBookId?: string }
-  const ideaHook = useSwingCharts(ideaId ?? null)
-  const modelBookHook = useSwingModelBookCharts(modelBookId ?? null)
-  const { charts, mutate, error } = modelBookId ? modelBookHook : ideaHook
+  const ideaHook = useSwingCharts("ideaId" in props ? props.ideaId ?? null : null)
+  const modelBookHook = useSwingModelBookCharts("modelBookId" in props ? props.modelBookId ?? null : null)
+  const { charts, mutate, error } = "modelBookId" in props ? modelBookHook : ideaHook
+  const showUpload = "ideaId" in props
   const [lightbox, setLightbox] = useState<SwingChart | null>(null)
 
   return (
     <div className="space-y-4">
-      {ideaId && (
-        <ChartUploadDropzone ideaId={ideaId} onUploaded={() => mutate()} />
+      {showUpload && (
+        <ChartUploadDropzone ideaId={props.ideaId} onUploaded={() => mutate()} />
       )}
       {error && (
         <div className="text-destructive text-sm" role="alert">Failed to load charts: {error.message}</div>

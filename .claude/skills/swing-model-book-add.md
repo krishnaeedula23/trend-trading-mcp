@@ -24,6 +24,9 @@ Args: free-form. Typical invocations:
    - Narrative (~100 words — what made it work/fail)
    - Key takeaways (bulleted)
    - Tags
+   - Chart URLs (paste TradingView screenshot URLs, one per line). For each URL also ask:
+     - Timeframe: one of daily | weekly | 60m | annotated (default: daily)
+     - Source: one of tradingview-upload | user-markup (default: tradingview-upload)
 5. `POST $RAILWAY_SWING_BASE/api/swing/model-book` with all fields:
    ```
    {
@@ -39,5 +42,13 @@ Args: free-form. Typical invocations:
      "tags": ["semis", "AI"]
    }
    ```
-6. If user pasted chart URLs: for each, `POST /api/swing/charts` with `model_book_id` set to the returned id (from step 5).
+6. If user pasted chart URLs: for each, `POST $RAILWAY_SWING_BASE/api/swing/charts` with:
+   ```
+   {
+     "image_url": "<url>",
+     "timeframe": "<daily|weekly|60m|annotated>",
+     "source": "<tradingview-upload|user-markup>",
+     "model_book_id": "<model_book_id from step 5>"
+   }
+   ```
 7. Confirm: "✅ Added to Model Book — <link to /swing-ideas/model-book/<id>>".

@@ -39,6 +39,14 @@ For each idea with status in ('watching','triggered','adding','trailing'):
 ## Step 2: Closed-idea retrospectives
 
 For ideas closed (status exited|invalidated) in the last 7 days:
+
+Note: the ideas list endpoint only supports single-status filter. Fetch both statuses, then filter client-side by `invalidated_at` or `detected_at`:
+
+1. `GET $RAILWAY_SWING_BASE/api/swing/ideas?status=exited&limit=50`
+2. `GET $RAILWAY_SWING_BASE/api/swing/ideas?status=invalidated&limit=50`
+3. Merge. Filter client-side: keep ideas where `invalidated_at` (or `detected_at` as fallback) is within the last 7 days.
+
+For each such idea:
 1. Gather full timeline (detection → transitions → exit).
 2. Generate a "what went right/wrong + takeaway" retrospective (~100 words).
 3. POST as `event_type=user_note` to `/api/swing/ideas/<id>/events` with `summary="Retrospective"` and the text in `payload.text`.

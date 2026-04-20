@@ -15,6 +15,23 @@ For each of the top-10 active swing ideas (by confluence_score, excluding ideas 
 
 See `_swing-shared.md` for env vars (`RAILWAY_SWING_BASE`, `SWING_API_TOKEN` file location) and Slack channel routing.
 
+## KNOWN LIMITATION (Plan 4 MVP)
+
+Chart upload to Vercel Blob from the Mac-side skill is **not yet implemented**.
+The `@vercel/blob/client.upload()` flow is browser-only (it needs the Vercel
+Blob client SDK + `HandleUploadBody` shape). For now:
+
+- Capture charts with `tv_screenshot()` locally
+- Save to `~/Downloads/swing-charts/<ticker>-<yyyy-mm-dd>-<tf>.png`
+- The POST to `/api/swing/ideas/<id>/snapshots` should set
+  `chart_*_url: null` and include the local path in `analysis_sources.local_chart_paths`
+
+Follow-up tracked: add a Mac-callable `POST $RAILWAY_SWING_BASE/api/swing/charts/upload`
+endpoint that accepts multipart and forwards to Vercel Blob server-side.
+
+This limitation does NOT block the skill — Claude vision analysis still
+runs on the local chart file; only the persisted blob URL is deferred.
+
 ## Preflight (abort + Slack warn on any failure — check in order)
 
 1. **tradingview-mcp health**: call `tv_health_check`. If it does not return OK:
@@ -49,13 +66,13 @@ Merge, filter client-side to ideas where `deep_thesis_at` is null or older than 
 **Preferred — single composite screenshot (if `tv_multi_pane` is available):**
 - `tv_navigate_symbol(ticker)`
 - `tv_multi_pane(ticker, panes=["1D", "1W", "60", "phase_osc"])` — 2×2 layout
-- `tv_screenshot()` → upload to Vercel Blob via `POST /api/swing/blob/upload-token` flow → capture as `chart_composite_url`
+- `tv_screenshot()` → save to `~/Downloads/swing-charts/<ticker>-<date>-composite.png`
 - Read indicators once: `tv_read_indicators()` → store full dict as `tv_indicators`
 
 **Fallback (if `tv_multi_pane` not available — 3 separate captures):**
-- `tv_navigate_symbol(ticker)` → `tv_set_timeframe('1D')` → `tv_screenshot()` → upload → capture `chart_daily_url`; `tv_read_indicators()`
-- `tv_set_timeframe('1W')` → `tv_screenshot()` → upload → `chart_weekly_url`
-- `tv_set_timeframe('60')` → `tv_screenshot()` → upload → `chart_60m_url`
+- `tv_navigate_symbol(ticker)` → `tv_set_timeframe('1D')` → `tv_screenshot()` → save to `~/Downloads/swing-charts/<ticker>-<date>-daily.png`; `tv_read_indicators()`
+- `tv_set_timeframe('1W')` → `tv_screenshot()` → save to `~/Downloads/swing-charts/<ticker>-<date>-weekly.png`
+- `tv_set_timeframe('60')` → `tv_screenshot()` → save to `~/Downloads/swing-charts/<ticker>-<date>-60m.png`
 
 The Saty Pine-script indicator values from `tv_read_indicators()` (EMA10, EMA20, Phase Osc, ATR Levels) are authoritative — do not recompute them in Python.
 
@@ -102,7 +119,8 @@ Content-Type: application/json
 }
 ```
 
-Also POST `deep_thesis` via `POST /api/swing/ideas/<id>/thesis { layer: "deep", ... }` (Plan 3 endpoint).
+Also POST `deep_thesis` via `POST $RAILWAY_SWING_BASE/api/swing/ideas/<id>/thesis { layer: "deep", ... }` (Plan 3 endpoint).
+Include header: `Idempotency-Key: <idea_id>:<today ISO>` — re-runs on same day are no-ops.
 
 ### 6. Sleep 10s before next ticker
 

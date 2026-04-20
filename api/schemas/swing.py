@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UniverseTicker(BaseModel):
@@ -66,6 +66,25 @@ class SwingIdea(BaseModel):
     market_health: dict[str, Any] | None = None
     risk_flags: dict[str, Any]
     detection_evidence: dict[str, Any] | None = None
+    direction: str | None = None                   # 'long' | 'short' (usually 'long')
+    setup_saty: str | None = None
+    base_thesis_at: datetime | None = None
+    deep_thesis: str | None = None
+    deep_thesis_at: datetime | None = None
+    deep_thesis_sources: list[str] | None = None
+    watching_since: datetime | None = None
+    invalidated_at: datetime | None = None
+    invalidated_reason: str | None = None
+    next_earnings_date: date | None = None
+    beta: float | None = None
+    avg_daily_dollar_volume: float | None = None
+    suggested_position_pct: float | None = None
+    suggested_risk_bips: float | None = None
+    fundamentals: dict[str, Any] | None = None
+    user_notes: str | None = None
+    tags: list[str] | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class SwingIdeaListResponse(BaseModel):
