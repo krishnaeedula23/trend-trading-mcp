@@ -7,6 +7,7 @@ Routes:
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 
@@ -18,6 +19,7 @@ from api.indicators.screener.bars import fetch_daily_bars_bulk
 from api.indicators.screener.runner import run_screener
 from api.indicators.screener.universe_override import (
     add_overrides,
+    apply_overrides,
     clear_overrides,
     list_overrides,
     remove_overrides,
@@ -36,6 +38,8 @@ from api.schemas.screener import (
 # Side effect: registers the coiled_spring scan
 import api.indicators.screener.scans  # noqa: F401
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
 
@@ -58,9 +62,7 @@ def _resolve_base_universe(sb: Client, mode: Mode) -> tuple[list[str], str]:
 
 def _resolve_active_universe(sb: Client, mode: Mode) -> list[str]:
     base, _ = _resolve_base_universe(sb, mode)
-    added, removed = list_overrides(sb, mode)
-    eff = (set(base) | set(added)) - set(removed)
-    return sorted(eff)
+    return apply_overrides(sb, base, mode)
 
 
 @router.post(
@@ -116,7 +118,15 @@ def update_universe(req: UniverseUpdateRequest) -> UniverseUpdateResponse:
         # fails, overrides are left empty. Acceptable for v1 (low-frequency,
         # human-driven via Claude skill); revisit in Plan 2 if it bites.
         clear_overrides(sb, mode=req.mode)
-        add_overrides(sb, mode=req.mode, tickers=req.tickers)
+        try:
+            add_overrides(sb, mode=req.mode, tickers=req.tickers)
+        except Exception:
+            logger.exception(
+                "replace action: clear succeeded but add failed for mode=%s; "
+                "overrides are now empty",
+                req.mode,
+            )
+            raise
     elif req.action == "clear_overrides":
         clear_overrides(sb, mode=req.mode)
     else:

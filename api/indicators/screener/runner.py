@@ -73,6 +73,11 @@ def run_screener(
             if hit.scan_id == "coiled_spring":
                 coiled_tickers.add(hit.ticker)
 
+    # TODO(plan-2): wire backfill_days_in_compression for newly-detected coiled
+    # tickers so existing coils don't reset to day 1 on first observation.
+    # Requires threading bars_by_ticker + is_coiled_fn into the persistence
+    # call site (or computing the per-ticker initial day count here and
+    # passing as an optional dict to update_coiled_watchlist).
     update_coiled_watchlist(sb, mode=mode, coiled_tickers=coiled_tickers, today=today)
 
     ticker_results: list[TickerResult] = []

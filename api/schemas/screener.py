@@ -54,7 +54,10 @@ class ScreenerRunResponse(BaseModel):
     mode: Mode
     ran_at: datetime
     universe_size: int
-    scan_count: int
+    scan_count: int = Field(
+        ...,
+        description="Number of scans dispatched in this run (i.e. registered scans for the mode after optional scan_ids filter). Not the number of (ticker, scan) hit pairings — see hit_count for tickers with at least one hit.",
+    )
     hit_count: int
     duration_seconds: float
     tickers: list[TickerResult]
