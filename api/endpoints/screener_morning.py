@@ -10,9 +10,10 @@ from __future__ import annotations
 import os
 from datetime import date
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client, create_client
 
+from api.endpoints.swing_auth import require_swing_token
 from api.indicators.screener.bars import fetch_daily_bars_bulk
 from api.indicators.screener.runner import run_screener
 from api.indicators.screener.universe_override import (
@@ -62,7 +63,11 @@ def _resolve_active_universe(sb: Client, mode: Mode) -> list[str]:
     return sorted(eff)
 
 
-@router.post("/morning/run", response_model=ScreenerRunResponse)
+@router.post(
+    "/morning/run",
+    response_model=ScreenerRunResponse,
+    dependencies=[Depends(require_swing_token)],
+)
 def run_morning(req: ScreenerRunRequest) -> ScreenerRunResponse:
     sb = _get_supabase()
     tickers = _resolve_active_universe(sb, req.mode)
@@ -94,7 +99,11 @@ def get_universe(mode: Mode = "swing") -> UniverseShowResponse:
     )
 
 
-@router.post("/universe/update", response_model=UniverseUpdateResponse)
+@router.post(
+    "/universe/update",
+    response_model=UniverseUpdateResponse,
+    dependencies=[Depends(require_swing_token)],
+)
 def update_universe(req: UniverseUpdateRequest) -> UniverseUpdateResponse:
     sb = _get_supabase()
 
@@ -103,10 +112,10 @@ def update_universe(req: UniverseUpdateRequest) -> UniverseUpdateResponse:
     elif req.action == "remove":
         remove_overrides(sb, mode=req.mode, tickers=req.tickers)
     elif req.action == "replace":
+        # Note: not atomic — clear + add are two Supabase calls. If the second
+        # fails, overrides are left empty. Acceptable for v1 (low-frequency,
+        # human-driven via Claude skill); revisit in Plan 2 if it bites.
         clear_overrides(sb, mode=req.mode)
-        # Treat replacement as: clear, then add the new list as overrides.
-        # The base universe still applies; replacement here means "these are
-        # the only overrides on top of the resolved base".
         add_overrides(sb, mode=req.mode, tickers=req.tickers)
     elif req.action == "clear_overrides":
         clear_overrides(sb, mode=req.mode)

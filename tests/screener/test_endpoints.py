@@ -1,6 +1,7 @@
 """Endpoint tests for the morning screener API."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
@@ -14,6 +15,17 @@ from api.schemas.screener import (
     ScreenerRunResponse,
     TickerResult,
 )
+
+
+TEST_TOKEN = "test-bearer-token-deadbeef"
+AUTH_HEADERS = {"Authorization": f"Bearer {TEST_TOKEN}"}
+
+
+@pytest.fixture(autouse=True)
+def _set_swing_token():
+    os.environ["SWING_API_TOKEN"] = TEST_TOKEN
+    yield
+    os.environ.pop("SWING_API_TOKEN", None)
 
 
 @pytest.fixture
@@ -49,7 +61,7 @@ def test_run_morning_endpoint_calls_runner(client):
         with patch("api.endpoints.screener_morning.fetch_daily_bars_bulk", return_value={"NVDA": MagicMock()}):
             with patch("api.endpoints.screener_morning.run_screener", return_value=fake_response):
                 with patch("api.endpoints.screener_morning._get_supabase", return_value=MagicMock()):
-                    res = client.post("/api/screener/morning/run", json={"mode": "swing"})
+                    res = client.post("/api/screener/morning/run", json={"mode": "swing"}, headers=AUTH_HEADERS)
     assert res.status_code == 200
     body = res.json()
     assert body["mode"] == "swing"
@@ -77,6 +89,7 @@ def test_universe_update_add_action(client):
                     res = client.post(
                         "/api/screener/universe/update",
                         json={"mode": "swing", "action": "add", "tickers": ["NVDA"]},
+                        headers=AUTH_HEADERS,
                     )
     assert res.status_code == 200
     mock_add.assert_called_once()
@@ -92,6 +105,35 @@ def test_universe_update_clear_overrides(client):
                     res = client.post(
                         "/api/screener/universe/update",
                         json={"mode": "swing", "action": "clear_overrides"},
+                        headers=AUTH_HEADERS,
                     )
     assert res.status_code == 200
     mock_clear.assert_called_once()
+
+
+def test_run_morning_rejects_missing_bearer(client):
+    """No Authorization header → 401."""
+    res = client.post("/api/screener/morning/run", json={"mode": "swing"})
+    assert res.status_code == 401
+
+
+def test_universe_update_rejects_invalid_bearer(client):
+    """Wrong bearer token → 401."""
+    res = client.post(
+        "/api/screener/universe/update",
+        json={"mode": "swing", "action": "clear_overrides"},
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    assert res.status_code == 401
+
+
+def test_run_morning_rejects_position_mode(client):
+    """Position mode is not supported in Plan 1 → 501."""
+    with patch("api.endpoints.screener_morning._get_supabase", return_value=MagicMock()):
+        res = client.post(
+            "/api/screener/morning/run",
+            json={"mode": "position"},
+            headers=AUTH_HEADERS,
+        )
+    assert res.status_code == 501
+    assert "not supported" in res.json()["detail"].lower()
