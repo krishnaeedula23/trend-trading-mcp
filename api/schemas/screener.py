@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 Mode = Literal["swing", "position"]
@@ -27,7 +27,10 @@ class ScanHit(BaseModel):
     scan_id: str
     lane: Lane
     role: Role
-    evidence: dict = Field(default_factory=dict)
+    evidence: dict = Field(
+        default_factory=dict,
+        description="Per-scan evidence payload; shape is owned by each scan implementation.",
+    )
 
 
 class ScreenerRunRequest(BaseModel):
@@ -70,6 +73,12 @@ class UniverseUpdateRequest(BaseModel):
     mode: Mode
     action: Literal["add", "remove", "replace", "clear_overrides"]
     tickers: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _tickers_required_for_mutating_actions(self) -> "UniverseUpdateRequest":
+        if self.action in ("add", "remove", "replace") and not self.tickers:
+            raise ValueError(f"action '{self.action}' requires a non-empty tickers list")
+        return self
 
 
 class UniverseUpdateResponse(BaseModel):
