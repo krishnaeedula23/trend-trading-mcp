@@ -45,3 +45,20 @@ def test_overlay_raises_when_insufficient_bars(synth_daily_bars):
     bars = synth_daily_bars(closes=[100.0] * 49)
     with pytest.raises(ValueError, match="at least 50"):
         compute_overlay(bars)
+
+
+def test_indicator_overlay_has_extended_fields():
+    """Plan 2: schema must carry volume / move / phase / ribbon fields used by new scans."""
+    from api.schemas.screener import IndicatorOverlay
+    sample = IndicatorOverlay(
+        atr_pct=0.02, pct_from_50ma=0.0, extension=0.0, sma_50=100.0, atr_14=2.0,
+        volume_avg_50d=1_000_000.0, relative_volume=1.0, gap_pct_open=0.0,
+        adr_pct_20d=0.04, pct_change_today=0.0, pct_change_30d=0.0,
+        pct_change_90d=0.0, pct_change_180d=0.0, dollar_volume_today=100_000_000.0,
+        phase_oscillator=0.0, phase_in_compression=False,
+        ribbon_state="bullish", bias_candle="green", above_48ema=True,
+        saty_levels_by_mode={},
+    )
+    assert sample.relative_volume == 1.0
+    assert sample.phase_in_compression is False
+    assert sample.ribbon_state == "bullish"
