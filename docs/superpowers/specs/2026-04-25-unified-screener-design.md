@@ -232,6 +232,36 @@ Click row to expand inline drawer.
 8. No motion except: row expand/collapse + new-hit pulse on refresh
 9. Reference visual baseline: Linear, Plaid dashboards (not Bloomberg, not TradingView)
 
+### 10.5 Responsive / mobile behavior (binding)
+
+The page must be usable on phone (the morning routine often happens on mobile before the user is at a desk). Tailwind breakpoints: `sm` <640px, `md` ≥768px, `lg` ≥1024px.
+
+**Layout adaptation:**
+
+| Element | Mobile (`sm`) | Tablet (`md`) | Desktop (`lg+`) |
+|---|---|---|---|
+| Mode tabs | Pill toggle (Swing / Position) | Tabs | Tabs |
+| Lane tabs | Horizontal-scroll tabs with snap, icon + abbreviation | Full label tabs | Full label tabs |
+| Row layout | **Stacked card** — 3 lines: (1) Ticker · Price · Ext (2) Scan badge row (3) Confluence · Quick action | 5 columns (drop ATR% and Lane scans → into expanded card) | 7 columns (full schema §10.2) |
+| Row expand | **Bottom sheet drawer** sliding from bottom (full-width, 80vh max) | Inline expand | Inline expand |
+| Sticky header | Mode pill + lane tabs only; refresh button moves to drawer-overlay action | Full sticky header | Full sticky header |
+| Section headers | Collapsed by default (Universe / Coiled / Setup-ready / Trigger as accordion) — Trigger expanded by default | All expanded | All expanded |
+| Tap targets | ≥44px height on all interactive elements | Standard | Standard |
+
+**Mobile-specific rules:**
+
+1. **Trigger lane is the default mobile view** — that's what matters at 6:30 AM PT on a phone. Other roles collapsed under accordions.
+2. **No horizontal scroll on tables.** Card stack instead. Horizontal scroll on a row is a failure mode.
+3. **Bottom sheet drawer** uses native scroll and snaps to 50vh / 80vh / full. Closes on swipe down.
+4. **Confluence count and Extension color** are the two visual anchors that must remain visible at every breakpoint — they drive the "scan and decide" flow.
+5. **Manual refresh button** must be thumb-reachable — bottom-right floating action button on mobile, sticky header position on desktop.
+6. **Charts in the drawer** (Saty levels mini-chart, Phase gauge) render at full drawer width on mobile, not fixed pixel widths.
+
+**Out of scope for mobile MVP:**
+- Universe editing — desktop-only (Claude skills are CLI anyway)
+- Position mode — same as desktop, deferred entirely
+- Multi-select / bulk actions
+
 ## 11. Backend architecture
 
 ### 11.1 Components
@@ -314,6 +344,7 @@ MVP is successful if:
 6. Extension auto-promotion correctly moves at least one ticker between lanes per week
 7. The page **does not feel cluttered** — passes a "Linear/Plaid dashboard" aesthetic test, not a "Bloomberg terminal" one
 8. Manual universe editing via `/universe-*` Claude skills works without UI
+9. **Trigger lane is fully usable on a phone at 6:30 AM PT** without horizontal scroll, with one-thumb operation
 
 ## 15. Open questions to revisit during implementation
 
