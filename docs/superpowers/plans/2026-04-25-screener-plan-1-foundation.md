@@ -303,7 +303,7 @@ def mock_supabase():
 - [ ] **Step 3: Verify pytest discovers the module**
 
 ```bash
-venv/bin/python -m pytest tests/screener/ --collect-only -q
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/ --collect-only -q
 ```
 
 Expected: `0 tests collected` (no test files yet, but no errors).
@@ -369,7 +369,7 @@ def test_overlay_raises_when_insufficient_bars(synth_daily_bars):
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_overlay.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_overlay.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'api.indicators.screener.overlay'`.
@@ -443,7 +443,7 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
 - [ ] **Step 5: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_overlay.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_overlay.py -v
 ```
 
 Expected: 3 passed.
@@ -550,7 +550,7 @@ def test_remove_overrides_writes_remove_rows(mock_supabase):
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_universe_override.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_universe_override.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -627,7 +627,7 @@ def apply_overrides(sb: Client, base_tickers: list[str], mode: Mode) -> list[str
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_universe_override.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_universe_override.py -v
 ```
 
 Expected: 5 passed.
@@ -708,7 +708,7 @@ def test_register_duplicate_raises():
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_registry.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_registry.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -777,7 +777,7 @@ def clear_registry() -> None:
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_registry.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_registry.py -v
 ```
 
 Expected: 3 passed.
@@ -905,7 +905,7 @@ def test_coiled_scan_skips_random_ticker():
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_coiled.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_coiled.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -1038,7 +1038,7 @@ register_scan(ScanDescriptor(
 - [ ] **Step 5: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_coiled.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_coiled.py -v
 ```
 
 Expected: 5 passed.
@@ -1189,7 +1189,7 @@ def test_get_active_coiled_filters_by_mode(mock_supabase):
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_persistence.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_persistence.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -1294,7 +1294,7 @@ def update_coiled_watchlist(
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_persistence.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_persistence.py -v
 ```
 
 Expected: 5 passed.
@@ -1365,7 +1365,7 @@ def test_backfill_returns_zero_when_today_not_coiled():
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_persistence.py -v -k backfill
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_persistence.py -v -k backfill
 ```
 
 Expected: FAIL with `ImportError: cannot import name 'backfill_days_in_compression'`.
@@ -1404,7 +1404,7 @@ def backfill_days_in_compression(
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_persistence.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_persistence.py -v
 ```
 
 Expected: 7 passed.
@@ -1532,7 +1532,7 @@ def test_runner_skips_tickers_with_insufficient_bars(mock_supabase):
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_runner.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_runner.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -1654,7 +1654,7 @@ def run_screener(
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_runner.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_runner.py -v
 ```
 
 Expected: 2 passed.
@@ -1738,7 +1738,7 @@ def test_fetch_daily_bars_bulk_skips_tickers_with_all_nans():
 - [ ] **Step 2: Run test — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_bars.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_bars.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -1799,7 +1799,7 @@ def fetch_daily_bars_bulk(
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_bars.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_bars.py -v
 ```
 
 Expected: 3 passed.
@@ -1925,7 +1925,7 @@ def test_universe_update_clear_overrides(client):
 - [ ] **Step 2: Run tests — expect failure**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_endpoints.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_endpoints.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -2063,7 +2063,7 @@ def update_universe(req: UniverseUpdateRequest) -> UniverseUpdateResponse:
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-venv/bin/python -m pytest tests/screener/test_endpoints.py -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/test_endpoints.py -v
 ```
 
 Expected: 4 passed.
@@ -2332,7 +2332,7 @@ git commit -m "test(screener): add end-to-end smoke test script"
 - [ ] **Step 1: Run all screener tests**
 
 ```bash
-venv/bin/python -m pytest tests/screener/ -v
+venv/bin/python -m pytest --confcutdir=tests/screener tests/screener/ -v
 ```
 
 Expected: all tests in tests/screener/ pass (≥22 tests).
