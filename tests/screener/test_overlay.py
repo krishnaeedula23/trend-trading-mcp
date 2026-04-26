@@ -62,3 +62,79 @@ def test_indicator_overlay_has_extended_fields():
     assert sample.relative_volume == 1.0
     assert sample.phase_in_compression is False
     assert sample.ribbon_state == "bullish"
+
+
+def test_overlay_computes_volume_metrics(synth_daily_bars):
+    bars = synth_daily_bars(closes=[100.0] * 60, volume=2_000_000)
+    out = compute_overlay(bars)
+    assert out.volume_avg_50d == pytest.approx(2_000_000.0)
+    assert out.relative_volume == pytest.approx(1.0)
+    assert out.dollar_volume_today == pytest.approx(2_000_000.0 * 100.0)
+
+
+def test_overlay_computes_pct_change_today(synth_daily_bars):
+    closes = [100.0] * 59 + [105.0]
+    bars = synth_daily_bars(closes=closes)
+    out = compute_overlay(bars)
+    assert out.pct_change_today == pytest.approx(0.05, rel=1e-6)
+
+
+def test_overlay_computes_gap_pct_open():
+    import pandas as pd
+    closes = [100.0] * 59 + [105.0]
+    bars = pd.DataFrame({
+        "date": pd.date_range("2026-01-01", periods=60, freq="B"),
+        "open":  [100.0] * 59 + [103.0],
+        "high":  [c * 1.005 for c in closes],
+        "low":   [c * 0.995 for c in closes],
+        "close": closes, "volume": [1_000_000] * 60,
+    })
+    out = compute_overlay(bars)
+    assert out.gap_pct_open == pytest.approx(0.03, rel=1e-6)
+
+
+def test_overlay_zero_pct_change_for_insufficient_lookback(synth_daily_bars):
+    bars = synth_daily_bars(closes=[100.0] * 60)
+    out = compute_overlay(bars)
+    assert out.pct_change_30d == pytest.approx(0.0, abs=1e-9)
+    assert out.pct_change_90d == 0.0
+    assert out.pct_change_180d == 0.0
+
+
+def test_overlay_computes_adr_pct_20d():
+    import pandas as pd
+    closes = [100.0] * 60
+    bars = pd.DataFrame({
+        "date": pd.date_range("2026-01-01", periods=60, freq="B"),
+        "open": closes,
+        "high": [c * 1.01 for c in closes],
+        "low":  [c * 0.99 for c in closes],
+        "close": closes, "volume": [1_000_000] * 60,
+    })
+    out = compute_overlay(bars)
+    assert out.adr_pct_20d == pytest.approx(0.02, rel=1e-3)
+
+
+def test_overlay_returns_phase_oscillator_value(synth_daily_bars):
+    bars = synth_daily_bars(closes=[100.0] * 60)
+    out = compute_overlay(bars)
+    assert -1.0 < out.phase_oscillator < 1.0
+    assert isinstance(out.phase_in_compression, bool)
+
+
+def test_overlay_returns_ribbon_state_for_uptrend(synth_daily_bars):
+    closes = [100.0 + i * 1.5 for i in range(120)]
+    bars = synth_daily_bars(closes=closes)
+    out = compute_overlay(bars)
+    assert out.ribbon_state == "bullish"
+    assert out.above_48ema is True
+
+
+def test_overlay_returns_saty_levels_for_day_mode(synth_daily_bars):
+    bars = synth_daily_bars(closes=[100.0] * 60)
+    out = compute_overlay(bars)
+    assert "day" in out.saty_levels_by_mode
+    day = out.saty_levels_by_mode["day"]
+    assert "call_trigger" in day
+    assert "put_trigger" in day
+    assert "levels" in day and "golden_gate_bull" in day["levels"]
