@@ -39,6 +39,18 @@ def test_apply_overrides_adds_and_removes(mock_supabase):
     assert "MSFT" in effective
 
 
+def test_apply_overrides_remove_wins_over_add_for_same_ticker(mock_supabase):
+    """Contract: when a ticker has both add and remove rows, remove wins."""
+    rows = [
+        {"mode": "swing", "ticker": "NVDA", "action": "add"},
+        {"mode": "swing", "ticker": "NVDA", "action": "remove"},
+    ]
+    mock_supabase.table.return_value = _table_chain(rows)
+    effective = apply_overrides(mock_supabase, base_tickers=["AAPL"], mode="swing")
+    assert "NVDA" not in effective
+    assert "AAPL" in effective
+
+
 def test_add_overrides_writes_unique_rows(mock_supabase):
     chain = _table_chain([])
     mock_supabase.table.return_value = chain

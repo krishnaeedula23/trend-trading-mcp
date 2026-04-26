@@ -12,28 +12,28 @@ from supabase import Client
 Mode = Literal["swing", "position"]
 
 
-def add_overrides(sb: Client, mode: Mode, tickers: list[str]) -> None:
-    """Insert add-overrides for the given tickers. Deduplicates input."""
+def _insert_override_rows(
+    sb: Client, mode: Mode, tickers: list[str], action: Literal["add", "remove"]
+) -> None:
+    """Normalize, dedupe, and insert override rows for the given action."""
     unique = sorted(set(t.upper().strip() for t in tickers if t.strip()))
     if not unique:
         return
     rows = [
-        {"mode": mode, "ticker": t, "action": "add", "source": "claude_skill"}
+        {"mode": mode, "ticker": t, "action": action, "source": "claude_skill"}
         for t in unique
     ]
     sb.table("universe_overrides").insert(rows).execute()
+
+
+def add_overrides(sb: Client, mode: Mode, tickers: list[str]) -> None:
+    """Insert add-overrides for the given tickers. Deduplicates input."""
+    _insert_override_rows(sb, mode, tickers, "add")
 
 
 def remove_overrides(sb: Client, mode: Mode, tickers: list[str]) -> None:
     """Insert remove-overrides for the given tickers. Deduplicates input."""
-    unique = sorted(set(t.upper().strip() for t in tickers if t.strip()))
-    if not unique:
-        return
-    rows = [
-        {"mode": mode, "ticker": t, "action": "remove", "source": "claude_skill"}
-        for t in unique
-    ]
-    sb.table("universe_overrides").insert(rows).execute()
+    _insert_override_rows(sb, mode, tickers, "remove")
 
 
 def clear_overrides(sb: Client, mode: Mode) -> None:
