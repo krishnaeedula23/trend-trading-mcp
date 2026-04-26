@@ -22,6 +22,7 @@ from api.endpoints.swing_model_book import router as swing_model_book_router
 from api.endpoints.swing_postmarket import router as swing_postmarket_router
 from api.endpoints.swing_snapshots import router as swing_snapshots_router
 from api.endpoints.swing_weekly import router as swing_weekly_router
+from api.endpoints.screener_morning import router as screener_morning_router
 
 # If SCHWAB_TOKEN_B64 is set (Railway deployment), always write the token file
 # from the env var. This ensures a fresh token (from re-running schwab_auth.py
@@ -78,6 +79,7 @@ app.include_router(swing_model_book_router)
 app.include_router(swing_postmarket_router)
 app.include_router(swing_snapshots_router)
 app.include_router(swing_weekly_router)
+app.include_router(screener_morning_router)
 
 
 @app.get("/health", tags=["meta"])
