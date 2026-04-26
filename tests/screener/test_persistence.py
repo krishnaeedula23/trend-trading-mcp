@@ -120,3 +120,46 @@ def test_get_active_coiled_filters_by_mode(mock_supabase):
     assert out == rows
     chain.eq.assert_any_call("mode", "swing")
     chain.eq.assert_any_call("status", "active")
+
+
+def test_backfill_days_in_compression_counts_consecutive_history():
+    """Backfill: given last 60 daily bars + an is_coiled fn, count consecutive
+    compressed days ending today."""
+    from api.indicators.screener.persistence import backfill_days_in_compression
+    import pandas as pd
+
+    # Fake is_coiled: True for last 6 bars, False before
+    history_len = 60
+
+    def fake_is_coiled(window: pd.DataFrame) -> bool:
+        return len(window) >= history_len - 5  # True for windows ending in last 6 days
+
+    bars = pd.DataFrame({
+        "date": pd.date_range("2026-02-01", periods=history_len, freq="B"),
+        "open": [100.0] * history_len,
+        "high": [101.0] * history_len,
+        "low": [99.0] * history_len,
+        "close": [100.0] * history_len,
+        "volume": [1_000_000] * history_len,
+    })
+    days = backfill_days_in_compression(bars, is_coiled_fn=fake_is_coiled)
+    assert days == 6
+
+
+def test_backfill_returns_zero_when_today_not_coiled():
+    from api.indicators.screener.persistence import backfill_days_in_compression
+    import pandas as pd
+
+    def never(_window):
+        return False
+
+    bars = pd.DataFrame({
+        "date": pd.date_range("2026-02-01", periods=60, freq="B"),
+        "open": [100.0] * 60,
+        "high": [101.0] * 60,
+        "low": [99.0] * 60,
+        "close": [100.0] * 60,
+        "volume": [1_000_000] * 60,
+    })
+    days = backfill_days_in_compression(bars, is_coiled_fn=never)
+    assert days == 0

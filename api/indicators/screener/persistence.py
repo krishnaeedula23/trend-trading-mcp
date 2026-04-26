@@ -89,3 +89,29 @@ def update_coiled_watchlist(
             upserts,
             on_conflict="ticker,mode,first_detected_at",
         ).execute()
+
+
+from typing import Callable
+
+import pandas as pd
+
+
+def backfill_days_in_compression(
+    bars: pd.DataFrame,
+    is_coiled_fn: Callable[[pd.DataFrame], bool],
+    max_lookback: int = 60,
+) -> int:
+    """Count consecutive trailing days where is_coiled_fn(bars[:i+1]) is True.
+
+    Used on first run so existing coils don't reset to day 1. Walks backward
+    from the latest bar; stops at the first non-coiled day.
+    """
+    n = len(bars)
+    end = n
+    days = 0
+    for offset in range(min(max_lookback, n)):
+        window = bars.iloc[: end - offset]
+        if not is_coiled_fn(window):
+            break
+        days += 1
+    return days
