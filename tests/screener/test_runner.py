@@ -107,3 +107,64 @@ def test_runner_skips_tickers_with_insufficient_bars(mock_supabase):
     tickers = [t.ticker for t in response.tickers]
     assert "OK" in tickers
     assert "SHORT" not in tickers
+
+
+def test_runner_filters_by_scan_ids(mock_supabase):
+    """When scan_ids is passed, only those scans run."""
+    def scan_a(bars_by, overlays_by):
+        return [ScanHit(ticker=t, scan_id="a", lane="breakout", role="trigger") for t in bars_by]
+
+    def scan_b(bars_by, overlays_by):
+        return [ScanHit(ticker=t, scan_id="b", lane="breakout", role="trigger") for t in bars_by]
+
+    register_scan(ScanDescriptor("a", "breakout", "trigger", "swing", scan_a))
+    register_scan(ScanDescriptor("b", "breakout", "trigger", "swing", scan_b))
+
+    def _make_chain(rows=None):
+        c = MagicMock()
+        c.insert.return_value = c
+        c.select.return_value = c
+        c.eq.return_value = c
+        c.upsert.return_value = c
+        c.execute.return_value = MagicMock(data=rows if rows is not None else [])
+        return c
+
+    runs_chain = _make_chain([{"id": "run-3"}])
+    coiled_chain = _make_chain([])
+    mock_supabase.table.side_effect = lambda name: runs_chain if name == "screener_runs" else coiled_chain
+
+    response = run_screener(
+        sb=mock_supabase,
+        mode="swing",
+        bars_by_ticker={"AAPL": _bars([100.0] * 60)},
+        today=date(2026, 4, 25),
+        scan_ids=["a"],
+    )
+
+    assert response.scan_count == 1
+    aapl = next(t for t in response.tickers if t.ticker == "AAPL")
+    assert aapl.scans_hit == ["a"]
+
+
+def test_runner_picks_up_scans_via_package_import():
+    """Regression test for prior bug: the scans PACKAGE __init__ must trigger
+    self-registration of every scan, because that's the production import path.
+
+    Use importlib.reload to force the side effect after the autouse fixture
+    cleared the registry — `import` alone is a no-op when modules are cached.
+    """
+    import importlib
+
+    import api.indicators.screener.scans as scans_pkg
+    import api.indicators.screener.scans.coiled as coiled_module
+    import api.indicators.screener.registry as registry_module
+
+    # Force the side effects to re-run against the cleared registry
+    importlib.reload(coiled_module)
+    importlib.reload(scans_pkg)
+
+    descriptors = registry_module.all_scans()
+    assert any(d.scan_id == "coiled_spring" for d in descriptors), (
+        "coiled_spring must self-register when the scans package is imported; "
+        "if this fails, scans/__init__.py is not importing coiled.py"
+    )

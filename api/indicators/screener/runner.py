@@ -16,9 +16,11 @@ Steps:
 """
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, datetime, timezone
 
+import pandas as pd
 from supabase import Client
 
 from api.indicators.screener.overlay import compute_overlay
@@ -32,7 +34,7 @@ from api.schemas.screener import (
 )
 
 
-import pandas as pd
+logger = logging.getLogger(__name__)
 
 
 def run_screener(
@@ -64,6 +66,7 @@ def run_screener(
         try:
             hits = desc.fn(eligible_bars, overlays)
         except Exception:
+            logger.exception("scan %s failed; skipping its hits for this run", desc.scan_id)
             continue
         for hit in hits:
             hits_by_ticker.setdefault(hit.ticker, []).append(hit.scan_id)

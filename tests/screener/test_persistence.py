@@ -26,7 +26,7 @@ def _chain(rows=None):
 
 
 def test_save_run_inserts_row(mock_supabase):
-    chain = _chain()
+    chain = _chain([{"id": "11111111-2222-3333-4444-555555555555"}])
     mock_supabase.table.return_value = chain
     payload = {
         "mode": "swing",
@@ -37,10 +37,19 @@ def test_save_run_inserts_row(mock_supabase):
         "results": {"tickers": []},
     }
     run_id = save_run(mock_supabase, payload)
-    assert run_id is not None
+    assert run_id == "11111111-2222-3333-4444-555555555555"
     insert_arg = chain.insert.call_args[0][0]
     assert insert_arg["mode"] == "swing"
     assert insert_arg["hit_count"] == 7
+
+
+def test_save_run_returns_none_when_no_representation(mock_supabase):
+    """If PostgREST somehow returns no rows, save_run returns None (not '')."""
+    chain = _chain([])
+    mock_supabase.table.return_value = chain
+    payload = {"mode": "swing", "universe_size": 0, "scan_count": 0,
+               "hit_count": 0, "duration_seconds": 0.0, "results": {"tickers": []}}
+    assert save_run(mock_supabase, payload) is None
 
 
 def test_update_coiled_watchlist_inserts_new_ticker(mock_supabase):

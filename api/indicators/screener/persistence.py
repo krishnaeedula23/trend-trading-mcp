@@ -2,19 +2,21 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
+from typing import Callable, Literal
 
+import pandas as pd
 from supabase import Client
 
 
 Mode = Literal["swing", "position"]
 
 
-def save_run(sb: Client, payload: dict) -> str:
-    """Insert a row into screener_runs and return the new id."""
+def save_run(sb: Client, payload: dict) -> str | None:
+    """Insert a row into screener_runs and return the new id (or None if PostgREST
+    didn't return a representation row — should not happen with default settings)."""
     res = sb.table("screener_runs").insert(payload).execute()
     rows = res.data or []
-    return rows[0]["id"] if rows else ""
+    return rows[0]["id"] if rows else None
 
 
 def get_active_coiled(sb: Client, mode: Mode) -> list[dict]:
@@ -89,11 +91,6 @@ def update_coiled_watchlist(
             upserts,
             on_conflict="ticker,mode,first_detected_at",
         ).execute()
-
-
-from typing import Callable
-
-import pandas as pd
 
 
 def backfill_days_in_compression(
