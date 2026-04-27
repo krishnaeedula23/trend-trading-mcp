@@ -50,22 +50,16 @@ def test_episodic_pivot_rejects_low_dollar_volume():
 
 
 def test_episodic_pivot_rejects_at_dollar_volume_boundary():
-    """Spec: dollar_volume > $100M strict — equality at $100M must reject."""
+    """dollar_volume_today exactly at $100M must reject (spec: strict > $100M)."""
     from api.indicators.screener.overlay import compute_overlay
     from api.indicators.screener.scans.qullamaggie_episodic_pivot import \
         qullamaggie_episodic_pivot_scan
 
-    closes = [100.0] * 59 + [108.0]
-    # 108 * V = 100_000_000 → V ≈ 925_926
-    bars = make_daily_bars(closes=closes, volumes=[1_000_000] * 59 + [925_926])
-    bars["high"] = [101.0] * 59 + [108.5]
+    closes = [92.0] * 59 + [100.0]   # pct_change ≈ 8.7%, above 7.5% gate
+    volumes = [1_000_000] * 60       # 100.0 * 1_000_000 = $100M exactly
+    bars = make_daily_bars(closes=closes, volumes=volumes)
+    bars["high"] = [99.0] * 59 + [99.5]   # yesterday_high (99) < close (100), passes
     overlays = {"NVDA": compute_overlay(bars)}
-    # Dollar volume = 108 * 925_926 ≈ 100_000_008 (slightly above) → fires.
-    # Tighten so it lands AT or below 100M:
-    bars = make_daily_bars(closes=closes, volumes=[1_000_000] * 59 + [925_925])
-    bars["high"] = [101.0] * 59 + [108.5]
-    overlays = {"NVDA": compute_overlay(bars)}
-    # 108 * 925_925 ≈ 99_999_900 → strictly below $100M → rejects on threshold
     assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays) == []
 
 
