@@ -16,7 +16,7 @@ import pandas as pd
 import talib
 
 from api.indicators.satyland.phase_oscillator import phase_oscillator
-from api.indicators.screener.registry import ScanDescriptor, register_scan
+from api.indicators.screener.registry import ScanDescriptor, make_hit, register_scan
 from api.schemas.screener import IndicatorOverlay, ScanHit
 
 logger = logging.getLogger(__name__)
@@ -84,17 +84,18 @@ def coiled_scan(
     overlays_by_ticker: dict[str, IndicatorOverlay],
 ) -> list[ScanHit]:
     hits: list[ScanHit] = []
-    for ticker, bars in bars_by_ticker.items():
+    for ticker, overlay in overlays_by_ticker.items():
+        bars = bars_by_ticker[ticker]
         if not is_coiled(bars):
             continue
-        hits.append(ScanHit(
+        hits.append(make_hit(
             ticker=ticker, scan_id="coiled_spring",
             lane="breakout", role="coiled",
+            overlay=overlay, bars=bars,
             evidence={
                 "donchian_width_pct": _donchian_width_pct(bars),
                 "ttm_squeeze_on": True,
                 "phase_oscillator": _phase_oscillator_value(bars),
-                "close": float(bars["close"].iloc[-1]),
                 "sma_50": float(bars["close"].rolling(50).mean().iloc[-1]),
             },
         ))

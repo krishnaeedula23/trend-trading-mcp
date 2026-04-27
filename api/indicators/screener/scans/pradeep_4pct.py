@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from api.indicators.screener.registry import ScanDescriptor, register_scan
+from api.indicators.screener.registry import ScanDescriptor, make_hit, register_scan
 from api.schemas.screener import IndicatorOverlay, ScanHit
 
 
@@ -28,7 +28,7 @@ def _check(bars: pd.DataFrame, overlay: IndicatorOverlay) -> dict | None:
         return None
     if today_vol <= yesterday_vol:
         return None
-    if today_vol < MIN_VOLUME:
+    if today_vol <= MIN_VOLUME:
         return None
     return {
         "pct_change_today": overlay.pct_change_today,
@@ -43,15 +43,15 @@ def pradeep_4pct_scan(
 ) -> list[ScanHit]:
     hits: list[ScanHit] = []
     for ticker, overlay in overlays_by_ticker.items():
-        bars = bars_by_ticker.get(ticker)
-        if bars is None:
-            continue
+        bars = bars_by_ticker[ticker]
         evidence = _check(bars, overlay)
         if evidence is None:
             continue
-        hits.append(ScanHit(
+        hits.append(make_hit(
             ticker=ticker, scan_id="pradeep_4pct_breakout",
-            lane="breakout", role="trigger", evidence=evidence,
+            lane="breakout", role="trigger",
+            overlay=overlay, bars=bars,
+            evidence=evidence,
         ))
     return hits
 

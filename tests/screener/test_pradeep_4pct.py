@@ -3,18 +3,7 @@ from __future__ import annotations
 
 import importlib
 
-import pandas as pd
-
-
-def _bars(closes, volumes):
-    n = len(closes)
-    return pd.DataFrame({
-        "date": pd.date_range("2026-01-01", periods=n, freq="B"),
-        "open": closes,
-        "high": [c * 1.01 for c in closes],
-        "low":  [c * 0.99 for c in closes],
-        "close": closes, "volume": volumes,
-    })
+from tests.screener._helpers import make_daily_bars
 
 
 def test_pradeep_4pct_fires_on_5pct_up_with_volume_increase():
@@ -23,7 +12,7 @@ def test_pradeep_4pct_fires_on_5pct_up_with_volume_increase():
 
     closes = [100.0] * 59 + [105.0]
     volumes = [1_000_000] * 59 + [2_000_000]
-    bars = _bars(closes, volumes)
+    bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
     hits = pradeep_4pct_scan({"AAPL": bars}, overlays)
     assert len(hits) == 1
@@ -38,7 +27,7 @@ def test_pradeep_4pct_rejects_3pct_up():
 
     closes = [100.0] * 59 + [103.0]
     volumes = [1_000_000] * 60
-    bars = _bars(closes, volumes)
+    bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
     assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
 
@@ -49,7 +38,7 @@ def test_pradeep_4pct_rejects_when_volume_decreasing():
 
     closes = [100.0] * 59 + [105.0]
     volumes = [1_000_000] * 59 + [800_000]
-    bars = _bars(closes, volumes)
+    bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
     assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
 
@@ -60,7 +49,19 @@ def test_pradeep_4pct_rejects_when_volume_below_100k():
 
     closes = [100.0] * 59 + [105.0]
     volumes = [50_000] * 59 + [80_000]
-    bars = _bars(closes, volumes)
+    bars = make_daily_bars(closes, volumes)
+    overlays = {"AAPL": compute_overlay(bars)}
+    assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
+
+
+def test_pradeep_4pct_rejects_at_volume_boundary():
+    """volume_today exactly at 100_000 must reject (spec: strict > 100_000)."""
+    from api.indicators.screener.overlay import compute_overlay
+    from api.indicators.screener.scans.pradeep_4pct import pradeep_4pct_scan
+
+    closes = [100.0] * 59 + [105.0]
+    volumes = [99_000] * 59 + [100_000]   # today equals threshold
+    bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
     assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
 

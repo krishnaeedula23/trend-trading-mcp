@@ -54,3 +54,28 @@ def all_scans() -> list[ScanDescriptor]:
 def clear_registry() -> None:
     """Test-only: empty the registry."""
     _REGISTRY.clear()
+
+
+def make_hit(
+    ticker: str,
+    scan_id: str,
+    lane: Lane,
+    role: Role,
+    overlay: IndicatorOverlay,
+    bars: pd.DataFrame,
+    evidence: dict | None = None,
+) -> ScanHit:
+    """Construct a ScanHit with baseline evidence (close, dollar_volume_today)
+    automatically populated from the overlay/bars. Per-scan evidence kwargs
+    are merged on top.
+    """
+    base_evidence = {
+        "close": float(bars["close"].iloc[-1]),
+        "dollar_volume_today": overlay.dollar_volume_today,
+    }
+    if evidence:
+        base_evidence.update(evidence)
+    return ScanHit(
+        ticker=ticker, scan_id=scan_id,
+        lane=lane, role=role, evidence=base_evidence,
+    )
