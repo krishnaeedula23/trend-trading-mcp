@@ -22,6 +22,12 @@ because not every universe ticker has hourly data. Those scans MUST guard
 against missing daily/overlay keys before calling `make_hit` (which uses
 the daily close + dollar volume for evidence enrichment).
 
+Scans that need to skip a benchmark ticker (e.g. kell_wedge_pop, which
+compares each candidate against QQQ) iterate `bars_by_ticker.items()` and
+use `overlays_by_ticker.get(ticker)` with a None guard. The None guard is
+needed because compute_overlay raises on <50 bars, so not every ticker in
+bars necessarily has an overlay.
+
 Scans that don't read hourly data accept the third arg with `# noqa: ARG001`.
 """
 from . import coiled         # noqa: F401

@@ -50,7 +50,13 @@ def kell_wedge_pop_scan(
             ticker=ticker, scan_id="kell_wedge_pop",
             lane="breakout", role="setup_ready",
             overlay=overlay, bars=bars,
-            evidence=dict(setup_hit.detection_evidence),
+            evidence={
+                **dict(setup_hit.detection_evidence),
+                "entry_zone": list(setup_hit.entry_zone),
+                "stop_price": setup_hit.stop_price,
+                "first_target": setup_hit.first_target,
+                "raw_score": setup_hit.raw_score,
+            },
         ))
     return hits
 
