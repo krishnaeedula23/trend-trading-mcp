@@ -7,28 +7,36 @@ import pytest
 
 from api.indicators.screener.overlay import compute_overlay
 from api.indicators.screener.scans.coiled import (
-    is_coiled,
-    coiled_scan,
+    PHASE_OSCILLATOR_LOWER, PHASE_OSCILLATOR_UPPER,
+    is_coiled, coiled_scan,
 )
 
 
-def _bars_with_compression(start_close=100.0, days=120, compress_window=20):
-    """Build 120 bars: trend up, then a flat compression for last N bars.
+def _bars_with_compression(start_close=100.0, days=120, compress_window=40):
+    """Build 120 bars: a long flat base preceded by a small step-up.
 
-    compress_window must be >= BB_PERIOD (20) so that the Bollinger Band and
-    SMA windows fall entirely within the flat region, triggering TTM squeeze.
+    The flat period must be long enough for EMA21 to fully converge to the
+    current close (so `close - EMA21 ≈ 0` and Phase Oscillator → 0). Bars
+    in the flat period have realistic ±0.5 intra-bar ranges so ATR stays at
+    a meaningful value rather than collapsing.
+
+    Layout:
+      - first (days - compress_window) bars at start_close * 0.99
+      - last compress_window bars at start_close (a 1% step-up)
+
+    Result on default args (days=120, compress_window=40):
+      - 80 bars at 99.0 then 40 bars at 100.0
+      - SMA50 of the last 50 bars = (10 * 99 + 40 * 100) / 50 = 99.8
+      - close (100.0) > SMA50 (99.8) ✓ (trend gate)
+      - EMA21 fully converged to ~100 over 40 flat bars → oscillator near 0 ✓
+      - Donchian width ≈ 1 + noise ≈ 2 ⇒ 2% of close ⇒ < 8% ✓
+      - TTM Squeeze ON: BB std collapses on flat closes; ATR ≈ 1, KC wider ✓
     """
     rng = np.random.default_rng(42)
-    closes = list(np.linspace(start_close, start_close * 1.6, days - compress_window))
-    flat = [closes[-1]] * compress_window
-    closes = closes + flat
+    closes = [start_close * 0.99] * (days - compress_window) + [start_close] * compress_window
     dates = pd.date_range("2025-12-01", periods=days, freq="B")
-    highs = [c + rng.uniform(0.0, 0.2) for c in closes[:-compress_window]] + [
-        flat[0] + 0.05 for _ in range(compress_window)
-    ]
-    lows = [c - rng.uniform(0.0, 0.2) for c in closes[:-compress_window]] + [
-        flat[0] - 0.05 for _ in range(compress_window)
-    ]
+    highs = [c + float(rng.uniform(0.4, 0.6)) for c in closes]
+    lows  = [c - float(rng.uniform(0.4, 0.6)) for c in closes]
     return pd.DataFrame({
         "date": dates,
         "open": closes,
@@ -100,3 +108,23 @@ def test_coiled_scan_skips_random_ticker():
     overlays_by_ticker = {"NOISE": compute_overlay(bars)}
     hits = coiled_scan(bars_by_ticker, overlays_by_ticker)
     assert hits == []
+
+
+def test_phase_oscillator_thresholds_are_minus_20_to_plus_20():
+    """Spec §4: Phase Oscillator must be in compression zone (-20 to +20)."""
+    assert PHASE_OSCILLATOR_LOWER == -20.0
+    assert PHASE_OSCILLATOR_UPPER == 20.0
+
+
+def test_is_coiled_rejects_when_phase_oscillator_outside_band():
+    """Strong uptrend pushes oscillator above +20, so coiled must reject even if other gates would pass."""
+    closes = [100.0 + i * 1.5 for i in range(120)]
+    dates = pd.date_range("2025-12-01", periods=120, freq="B")
+    bars = pd.DataFrame({
+        "date": dates,
+        "open": closes,
+        "high":  [c * 1.005 for c in closes],
+        "low":   [c * 0.995 for c in closes],
+        "close": closes, "volume": [5_000_000] * 120,
+    })
+    assert is_coiled(bars) is False
