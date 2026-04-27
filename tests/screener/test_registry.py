@@ -20,7 +20,7 @@ def _reset_registry():
 
 
 def test_register_and_lookup_by_id():
-    def dummy_fn(bars_by_ticker, overlays_by_ticker):
+    def dummy_fn(bars_by_ticker, overlays_by_ticker, hourly_bars_by_ticker):
         return []
     desc = ScanDescriptor(
         scan_id="dummy",
@@ -34,7 +34,7 @@ def test_register_and_lookup_by_id():
 
 
 def test_get_scans_for_mode_filters():
-    def fn(_, __):
+    def fn(_b, _o, _h):
         return []
     register_scan(ScanDescriptor("a", "breakout", "trigger", "swing", fn))
     register_scan(ScanDescriptor("b", "breakout", "trigger", "position", fn))
@@ -45,8 +45,20 @@ def test_get_scans_for_mode_filters():
 
 
 def test_register_duplicate_raises():
-    def fn(_, __):
+    def fn(_b, _o, _h):
         return []
     register_scan(ScanDescriptor("dup", "breakout", "trigger", "swing", fn))
     with pytest.raises(ValueError, match="already registered"):
         register_scan(ScanDescriptor("dup", "breakout", "trigger", "swing", fn))
+
+
+def test_scan_descriptor_default_weight_is_one():
+    from api.indicators.screener.registry import ScanDescriptor
+    d = ScanDescriptor("x", "breakout", "trigger", "swing", lambda b, o, h: [])
+    assert d.weight == 1
+
+
+def test_scan_descriptor_accepts_explicit_weight():
+    from api.indicators.screener.registry import ScanDescriptor
+    d = ScanDescriptor("x", "breakout", "trigger", "swing", lambda b, o, h: [], weight=3)
+    assert d.weight == 3

@@ -10,15 +10,50 @@ from pydantic import BaseModel, Field, model_validator
 Mode = Literal["swing", "position"]
 Lane = Literal["breakout", "transition", "reversion"]
 Role = Literal["universe", "coiled", "setup_ready", "trigger"]
+RibbonState = Literal["bullish", "bearish", "chopzilla"]
+BiasCandle = Literal["green", "blue", "orange", "red", "gray"]
 
 
 class IndicatorOverlay(BaseModel):
     """Per-ticker indicator stack computed once per run."""
+    # Core (existing)
     atr_pct: float = Field(..., description="ATR(14) / close")
     pct_from_50ma: float = Field(..., description="(close - SMA50) / SMA50")
-    extension: float = Field(..., description="jfsrev formula: B/A")
+    extension: float = Field(..., description="jfsrev formula B/A")
     sma_50: float
     atr_14: float
+
+    # Volume / liquidity
+    volume_avg_50d: float = Field(0.0, description="Mean of last 50 daily volumes")
+    relative_volume: float = Field(0.0, description="Today's volume / volume_avg_50d")
+    dollar_volume_today: float = Field(0.0, description="close * volume on the latest bar")
+
+    # Move metrics
+    gap_pct_open: float = Field(0.0, description="(today_open - yesterday_close) / yesterday_close")
+    pct_change_today: float = Field(0.0, description="(today_close / yesterday_close) - 1")
+    pct_change_30d: float = Field(0.0, description="close / close[-31] - 1, or 0 if insufficient bars")
+    pct_change_90d: float = Field(0.0, description="close / close[-91] - 1, or 0 if insufficient bars")
+    pct_change_180d: float = Field(0.0, description="close / close[-181] - 1, or 0 if insufficient bars")
+    adr_pct_20d: float = Field(0.0, description="mean of (high-low)/close over last 20 bars")
+
+    # Phase Oscillator (Saty Pine port)
+    phase_oscillator: float = Field(0.0, description="Saty Phase Oscillator value, ±100 scale")
+    phase_in_compression: bool = Field(False, description="Saty Phase Oscillator compression_tracker")
+
+    # Pivot Ribbon Pro
+    ribbon_state: RibbonState = Field("chopzilla")
+    bias_candle: BiasCandle = Field("gray")
+    above_48ema: bool = Field(False)
+
+    # Saty ATR Levels per trading mode
+    saty_levels_by_mode: dict = Field(
+        default_factory=dict,
+        description=(
+            "{'day': {...}, 'multiday': {...}, 'swing': {...}} — values are the dict "
+            "returned by api.indicators.satyland.atr_levels.atr_levels(). Empty dict "
+            "if fewer bars than the mode requires."
+        ),
+    )
 
 
 class ScanHit(BaseModel):
@@ -46,7 +81,8 @@ class TickerResult(BaseModel):
     last_close: float
     overlay: IndicatorOverlay
     scans_hit: list[str]
-    confluence: int
+    confluence: int = Field(..., description="Weighted score: sum of scan weights for hits")
+    sector: str = Field("Unknown", description="GICS sector from yfinance, or 'Unknown'")
 
 
 class ScreenerRunResponse(BaseModel):
@@ -61,6 +97,10 @@ class ScreenerRunResponse(BaseModel):
     hit_count: int
     duration_seconds: float
     tickers: list[TickerResult]
+    sector_summary: dict[str, int] = Field(
+        default_factory=dict,
+        description="Sector → number of hit tickers in this run",
+    )
 
 
 class UniverseShowResponse(BaseModel):

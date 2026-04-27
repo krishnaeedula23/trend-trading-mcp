@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client, create_client
 
 from api.endpoints.swing_auth import require_swing_token
-from api.indicators.screener.bars import fetch_daily_bars_bulk
+from api.indicators.screener.bars import fetch_daily_bars_bulk, fetch_hourly_bars_bulk
 from api.indicators.screener.runner import run_screener
 from api.indicators.screener.universe_override import (
     add_overrides,
@@ -75,11 +75,13 @@ def run_morning(req: ScreenerRunRequest) -> ScreenerRunResponse:
     tickers = _resolve_active_universe(sb, req.mode)
     if not tickers:
         raise HTTPException(status_code=400, detail="Active universe is empty.")
-    bars_by_ticker = fetch_daily_bars_bulk(tickers, period="6mo")
+    daily = fetch_daily_bars_bulk(sorted(set(tickers) | {"QQQ"}), period="6mo")
+    hourly = fetch_hourly_bars_bulk(tickers, period="60d")
     return run_screener(
         sb=sb,
         mode=req.mode,
-        bars_by_ticker=bars_by_ticker,
+        bars_by_ticker=daily,
+        hourly_bars_by_ticker=hourly,
         today=date.today(),
         scan_ids=req.scan_ids,
     )

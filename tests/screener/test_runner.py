@@ -39,10 +39,10 @@ def test_runner_aggregates_hits_into_confluence(mock_supabase):
     bars_nvda = _bars([100.0] * 60)
     bars_by_ticker = {"AAPL": bars_aapl, "NVDA": bars_nvda}
 
-    def scan_a(bars_by, overlays_by):
+    def scan_a(bars_by, overlays_by, _hourly):
         return [ScanHit(ticker=t, scan_id="a", lane="breakout", role="trigger") for t in bars_by]
 
-    def scan_b(bars_by, overlays_by):
+    def scan_b(bars_by, overlays_by, _hourly):
         return [ScanHit(ticker="NVDA", scan_id="b", lane="breakout", role="trigger")]
 
     register_scan(ScanDescriptor("a", "breakout", "trigger", "swing", scan_a))
@@ -79,7 +79,7 @@ def test_runner_skips_tickers_with_insufficient_bars(mock_supabase):
     bars_short = _bars([100.0] * 30)  # < 50 bars: overlay raises
     bars_ok = _bars([100.0] * 60)
 
-    def scan_all(bars_by, overlays_by):
+    def scan_all(bars_by, overlays_by, _hourly):
         return [ScanHit(ticker=t, scan_id="x", lane="breakout", role="trigger") for t in overlays_by]
 
     register_scan(ScanDescriptor("x", "breakout", "trigger", "swing", scan_all))
@@ -111,10 +111,10 @@ def test_runner_skips_tickers_with_insufficient_bars(mock_supabase):
 
 def test_runner_filters_by_scan_ids(mock_supabase):
     """When scan_ids is passed, only those scans run."""
-    def scan_a(bars_by, overlays_by):
+    def scan_a(bars_by, overlays_by, _hourly):
         return [ScanHit(ticker=t, scan_id="a", lane="breakout", role="trigger") for t in bars_by]
 
-    def scan_b(bars_by, overlays_by):
+    def scan_b(bars_by, overlays_by, _hourly):
         return [ScanHit(ticker=t, scan_id="b", lane="breakout", role="trigger") for t in bars_by]
 
     register_scan(ScanDescriptor("a", "breakout", "trigger", "swing", scan_a))
@@ -144,6 +144,49 @@ def test_runner_filters_by_scan_ids(mock_supabase):
     assert response.scan_count == 1
     aapl = next(t for t in response.tickers if t.ticker == "AAPL")
     assert aapl.scans_hit == ["a"]
+
+
+def test_runner_returns_weighted_confluence(mock_supabase):
+    """Confluence score = sum of scan weights, not raw count."""
+    from datetime import date
+    from unittest.mock import MagicMock
+    from api.indicators.screener.registry import ScanDescriptor, register_scan, clear_registry
+    from api.indicators.screener.runner import run_screener
+    from api.schemas.screener import ScanHit
+
+    clear_registry()
+
+    def scan_heavy(bars_by, _o, _hourly):
+        return [ScanHit(ticker=t, scan_id="heavy", lane="breakout", role="trigger") for t in bars_by]
+
+    def scan_light(bars_by, _o, _hourly):
+        return [ScanHit(ticker=t, scan_id="light", lane="breakout", role="trigger") for t in bars_by]
+
+    register_scan(ScanDescriptor("heavy", "breakout", "trigger", "swing", scan_heavy, weight=3))
+    register_scan(ScanDescriptor("light", "breakout", "trigger", "swing", scan_light, weight=1))
+
+    def _make_chain(rows=None):
+        c = MagicMock()
+        c.insert.return_value = c
+        c.select.return_value = c
+        c.eq.return_value = c
+        c.upsert.return_value = c
+        c.execute.return_value = MagicMock(data=rows if rows is not None else [])
+        return c
+
+    runs_chain = _make_chain([{"id": "run-w"}])
+    coiled_chain = _make_chain([])
+    mock_supabase.table.side_effect = lambda name: runs_chain if name == "screener_runs" else coiled_chain
+
+    response = run_screener(
+        sb=mock_supabase, mode="swing",
+        bars_by_ticker={"AAPL": _bars([100.0] * 60)},
+        today=date(2026, 4, 25),
+    )
+    aapl = next(t for t in response.tickers if t.ticker == "AAPL")
+    assert aapl.confluence == 4
+    assert sorted(aapl.scans_hit) == ["heavy", "light"]
+    clear_registry()
 
 
 def test_runner_picks_up_scans_via_package_import():

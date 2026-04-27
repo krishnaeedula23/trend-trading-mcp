@@ -1,8 +1,47 @@
 """Scan implementations.
 
 Importing this package triggers self-registration of every scan via
-`register_scan(...)` calls at module bottom. The runner discovers scans purely
-through `get_scans_for_mode(...)` — so it must import this package (or the
-specific scan modules) to populate the registry.
+`register_scan(...)` calls at module bottom.
+
+## Scan iteration contract
+
+Each scan function has the signature:
+    scan_fn(
+        bars_by_ticker: dict[str, pd.DataFrame],          # daily bars
+        overlays_by_ticker: dict[str, IndicatorOverlay],
+        hourly_bars_by_ticker: dict[str, pd.DataFrame],   # may be empty
+    ) -> list[ScanHit]
+
+The runner guarantees `overlays_by_ticker.keys() ⊆ bars_by_ticker.keys()` —
+every ticker that has an overlay also has daily bars. Daily-bar scans iterate
+`overlays_by_ticker.items()` and use `bars_by_ticker[ticker]` as a direct
+lookup (no `is None` guards needed).
+
+Hourly-bar scans (e.g. vomy_up_hourly) iterate `hourly_bars_by_ticker.items()`
+because not every universe ticker has hourly data. Those scans MUST guard
+against missing daily/overlay keys before calling `make_hit` (which uses
+the daily close + dollar volume for evidence enrichment).
+
+Scans that need to skip a benchmark ticker (e.g. kell_wedge_pop, which
+compares each candidate against QQQ) iterate `bars_by_ticker.items()` and
+use `overlays_by_ticker.get(ticker)` with a None guard. The None guard is
+needed because compute_overlay raises on <50 bars, so not every ticker in
+bars necessarily has an overlay.
+
+Scans that don't read hourly data accept the third arg with `# noqa: ARG001`.
 """
-from . import coiled  # noqa: F401  -- triggers register_scan(coiled_spring)
+from . import coiled         # noqa: F401
+from . import pradeep_4pct   # noqa: F401
+from . import qullamaggie_episodic_pivot   # noqa: F401
+from . import qullamaggie_continuation_base   # noqa: F401
+from . import saty_trigger_up   # noqa: F401
+from . import saty_golden_gate_up   # noqa: F401
+from . import vomy_up_daily   # noqa: F401
+from . import vomy_up_hourly   # noqa: F401
+from . import ema_crossback   # noqa: F401
+from . import saty_reversion   # noqa: F401
+from . import vomy_down_extension   # noqa: F401
+from . import saty_trigger_down   # noqa: F401
+from . import kell_wedge_pop   # noqa: F401
+from . import kell_flag_base   # noqa: F401
+from . import kell_exhaustion_extension   # noqa: F401
