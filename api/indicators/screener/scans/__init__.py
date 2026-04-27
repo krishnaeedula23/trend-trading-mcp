@@ -20,3 +20,4 @@ from . import coiled         # noqa: F401
 from . import pradeep_4pct   # noqa: F401
 from . import qullamaggie_episodic_pivot   # noqa: F401
 from . import qullamaggie_continuation_base   # noqa: F401
+from . import saty_trigger_up   # noqa: F401
