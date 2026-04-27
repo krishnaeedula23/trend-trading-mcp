@@ -66,12 +66,8 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
     pct_from_50ma = (last_close - sma_50) / sma_50 if sma_50 > 0 else 0.0
     extension = (pct_from_50ma / atr_pct) if atr_pct > 0 else 0.0
 
-    # Volume
-    vol_series = pd.Series(volume)
-    if len(vol_series) >= VOLUME_AVG_PERIOD:
-        volume_avg_50d = float(vol_series.tail(VOLUME_AVG_PERIOD).mean())
-    else:
-        volume_avg_50d = float(vol_series.mean())
+    # Volume — len(bars) >= 50 enforced above, so .tail(50).mean() is safe.
+    volume_avg_50d = float(pd.Series(volume).tail(VOLUME_AVG_PERIOD).mean())
     last_volume = float(volume[-1])
     relative_volume = last_volume / volume_avg_50d if volume_avg_50d > 0 else 0.0
     dollar_volume_today = last_close * last_volume
@@ -79,8 +75,13 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
     # Move
     close_series = pd.Series(close)
     if len(close) >= 2 and float(close[-2]) > 0:
-        pct_change_today = (last_close / float(close[-2])) - 1.0
-        gap_pct_open = (float(bars["open"].iloc[-1]) - float(close[-2])) / float(close[-2])
+        prev_close = float(close[-2])
+        pct_change_today = (last_close / prev_close) - 1.0
+        today_open_raw = float(bars["open"].iloc[-1])
+        if pd.isna(today_open_raw):
+            gap_pct_open = 0.0
+        else:
+            gap_pct_open = (today_open_raw - prev_close) / prev_close
     else:
         pct_change_today = 0.0
         gap_pct_open = 0.0
@@ -88,19 +89,17 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
     pct_change_90d = _safe_pct_change(close_series, 90)
     pct_change_180d = _safe_pct_change(close_series, 180)
 
-    # ADR%
-    if len(bars) >= ADR_PERIOD:
-        rng = (bars["high"].astype(float) - bars["low"].astype(float)) / bars["close"].astype(float).replace(0, float("nan"))
-        adr_pct_20d = float(rng.tail(ADR_PERIOD).mean())
-    else:
-        adr_pct_20d = 0.0
+    # ADR% — len(bars) >= 50 (>= ADR_PERIOD) enforced above.
+    rng = (bars["high"].astype(float) - bars["low"].astype(float)) / bars["close"].astype(float).replace(0, float("nan"))
+    adr_pct_20d = float(rng.tail(ADR_PERIOD).mean())
 
     # Phase Oscillator
     try:
         po = phase_oscillator(bars)
         phase_value = float(po["oscillator"])
         phase_compression = bool(po["in_compression"])
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as exc:
+        logger.debug("phase_oscillator unavailable: %s", exc)
         phase_value, phase_compression = 0.0, False
 
     # Pivot Ribbon
@@ -109,27 +108,28 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
         ribbon_state = pr["ribbon_state"]
         bias_candle = pr["bias_candle"]
         above_48ema = bool(pr["above_48ema"])
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as exc:
+        logger.debug("pivot_ribbon unavailable: %s", exc)
         ribbon_state, bias_candle, above_48ema = "chopzilla", "gray", False
 
     # Saty ATR Levels by mode
     levels_by_mode: dict = {}
     try:
         levels_by_mode["day"] = atr_levels(bars, trading_mode="day", use_current_close=True)
-    except (ValueError, KeyError):
-        pass
+    except (ValueError, KeyError) as exc:
+        logger.debug("atr_levels unavailable for mode=day: %s", exc)
     weekly = _resample(bars, "W")
     if len(weekly) >= 2:
         try:
             levels_by_mode["multiday"] = atr_levels(weekly, trading_mode="multiday", use_current_close=True)
-        except (ValueError, KeyError):
-            pass
+        except (ValueError, KeyError) as exc:
+            logger.debug("atr_levels unavailable for mode=multiday: %s", exc)
     monthly = _resample(bars, "M")
     if len(monthly) >= 2:
         try:
             levels_by_mode["swing"] = atr_levels(monthly, trading_mode="swing", use_current_close=True)
-        except (ValueError, KeyError):
-            pass
+        except (ValueError, KeyError) as exc:
+            logger.debug("atr_levels unavailable for mode=swing: %s", exc)
 
     return IndicatorOverlay(
         atr_pct=atr_pct, pct_from_50ma=pct_from_50ma, extension=extension,

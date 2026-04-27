@@ -118,7 +118,8 @@ def test_overlay_computes_adr_pct_20d():
 def test_overlay_returns_phase_oscillator_value(synth_daily_bars):
     bars = synth_daily_bars(closes=[100.0] * 60)
     out = compute_overlay(bars)
-    assert -1.0 < out.phase_oscillator < 1.0
+    # Flat closes → close == EMA21 exactly → raw_signal = 0 → oscillator = 0.
+    assert out.phase_oscillator == pytest.approx(0.0, abs=1e-9)
     assert isinstance(out.phase_in_compression, bool)
 
 
@@ -138,3 +139,6 @@ def test_overlay_returns_saty_levels_for_day_mode(synth_daily_bars):
     assert "call_trigger" in day
     assert "put_trigger" in day
     assert "levels" in day and "golden_gate_bull" in day["levels"]
+    # Plan 2 review: confirm weekly/monthly modes also populate on a 60-bar input
+    assert "multiday" in out.saty_levels_by_mode
+    assert "swing" in out.saty_levels_by_mode
