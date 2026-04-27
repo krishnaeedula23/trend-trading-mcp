@@ -81,16 +81,17 @@ def test_kell_flag_base_fires_when_all_conditions_met():
     """
     _force_register()
     n = 60
-    # bars[0:35]   = 35 flat bars at 100
-    # bars[35:55]  = 20 bars rising 100 → 115 (+15% impulse, fully in [-25:-5])
-    # bars[55:60]  = 5 flat bars at 115 (tight base + drying)
-    flat_pre = [100.0] * 35
-    impulse = [100.0 + (15.0 * (i + 1) / 20.0) for i in range(20)]  # 100.75 → 115.0
-    flat_tail = [115.0] * 5
+    # bars[0:36]   = 36 flat bars at 100  (one extra; the impulse window starts at index 35
+    #                                       so this anchor IS the impulse window's first bar)
+    # bars[36:55]  = 19 bars rising 100 → 116 (+16% impulse, fully in [-25:-5])
+    # bars[55:60]  = 5 flat bars at 116 (tight base + drying)
+    flat_pre = [100.0] * 36
+    impulse = [100.0 + (16.0 * (i + 1) / 19.0) for i in range(19)]  # → 116.0
+    flat_tail = [116.0] * 5
     closes = flat_pre + impulse + flat_tail
     assert len(closes) == n
-    # Volume: prior 20 (impulse) at 1M, last 5 at 200k → ratio 0.2 < 0.8
-    volumes = [1_000_000] * 35 + [1_000_000] * 20 + [200_000] * 5
+    # Volume: prior 19 (impulse) at 1M, last 5 at 200k → ratio 0.2 < 0.8
+    volumes = [1_000_000] * 36 + [1_000_000] * 19 + [200_000] * 5
     bars = make_daily_bars(closes=closes, volumes=volumes, high_mult=1.005, low_mult=0.995)
     overlay = compute_overlay(bars).model_copy(update={
         "ribbon_state": "bullish",
@@ -98,10 +99,7 @@ def test_kell_flag_base_fires_when_all_conditions_met():
     })
     fn = _scan_fn()
     hits = fn({"NVDA": bars}, {"NVDA": overlay}, {})
-    if not hits:
-        import pytest
-        pytest.skip("synthetic did not satisfy all 5 gates simultaneously; categorical coverage in other tests")
-    assert len(hits) == 1
+    assert len(hits) == 1, f"expected 1 hit; got {len(hits)} (evidence keys: {[h.evidence.keys() for h in hits]})"
     hit = hits[0]
     assert hit.scan_id == "kell_flag_base"
     assert hit.lane == "breakout"
