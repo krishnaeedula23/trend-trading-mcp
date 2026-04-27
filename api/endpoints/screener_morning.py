@@ -75,7 +75,7 @@ def run_morning(req: ScreenerRunRequest) -> ScreenerRunResponse:
     tickers = _resolve_active_universe(sb, req.mode)
     if not tickers:
         raise HTTPException(status_code=400, detail="Active universe is empty.")
-    daily = fetch_daily_bars_bulk(tickers, period="6mo")
+    daily = fetch_daily_bars_bulk(sorted(set(tickers) | {"QQQ"}), period="6mo")
     hourly = fetch_hourly_bars_bulk(tickers, period="60d")
     return run_screener(
         sb=sb,
