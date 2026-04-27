@@ -124,7 +124,7 @@ def compute_overlay(bars: pd.DataFrame) -> IndicatorOverlay:
             levels_by_mode["multiday"] = atr_levels(weekly, trading_mode="multiday", use_current_close=True)
         except (ValueError, KeyError) as exc:
             logger.debug("atr_levels unavailable for mode=multiday: %s", exc)
-    monthly = _resample(bars, "M")
+    monthly = _resample(bars, "ME")
     if len(monthly) >= 2:
         try:
             levels_by_mode["swing"] = atr_levels(monthly, trading_mode="swing", use_current_close=True)
