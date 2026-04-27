@@ -18,3 +18,4 @@ lookup (no `is None` guards needed).
 """
 from . import coiled         # noqa: F401
 from . import pradeep_4pct   # noqa: F401
+from . import qullamaggie_episodic_pivot   # noqa: F401
