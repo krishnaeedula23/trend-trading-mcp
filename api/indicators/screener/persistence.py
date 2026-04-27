@@ -37,6 +37,7 @@ def update_coiled_watchlist(
     coiled_tickers: set[str],
     today: date,
     initial_days_by_ticker: dict[str, int] | None = None,
+    existing_rows: list[dict] | None = None,
 ) -> None:
     """Reconcile active coiled rows with today's coiled set.
 
@@ -45,7 +46,7 @@ def update_coiled_watchlist(
         of 1. Existing tickers ignore this dict and increment as before.
     """
     initial = initial_days_by_ticker or {}
-    existing = get_active_coiled(sb, mode)
+    existing = existing_rows if existing_rows is not None else get_active_coiled(sb, mode)
     existing_by_ticker = {r["ticker"]: r for r in existing}
 
     upserts: list[dict] = []

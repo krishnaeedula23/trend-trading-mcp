@@ -24,7 +24,8 @@ import pandas as pd
 from supabase import Client
 
 from api.indicators.screener.overlay import compute_overlay
-from api.indicators.screener.persistence import save_run, update_coiled_watchlist
+from api.indicators.screener.persistence import save_run, update_coiled_watchlist, backfill_days_in_compression, get_active_coiled
+from api.indicators.screener.scans.coiled import is_coiled
 from api.indicators.screener.registry import get_scans_for_mode
 from api.schemas.screener import (
     IndicatorOverlay,
@@ -73,16 +74,12 @@ def run_screener(
             if hit.scan_id == "coiled_spring":
                 coiled_tickers.add(hit.ticker)
 
-    from api.indicators.screener.scans.coiled import is_coiled
-    from api.indicators.screener.persistence import (
-        backfill_days_in_compression, get_active_coiled,
-    )
-    existing_active = {r["ticker"] for r in get_active_coiled(sb, mode)}
+    existing_rows = get_active_coiled(sb, mode)
+    existing_active = {r["ticker"] for r in existing_rows}
     new_coiled = coiled_tickers - existing_active
     initial_days = {
         ticker: backfill_days_in_compression(eligible_bars[ticker], is_coiled)
         for ticker in new_coiled
-        if ticker in eligible_bars
     }
 
     update_coiled_watchlist(
@@ -91,6 +88,7 @@ def run_screener(
         coiled_tickers=coiled_tickers,
         today=today,
         initial_days_by_ticker=initial_days,
+        existing_rows=existing_rows,
     )
 
     weights_by_id = {d.scan_id: d.weight for d in descriptors}
