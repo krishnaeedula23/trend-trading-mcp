@@ -46,3 +46,45 @@ def fetch_daily_bars_bulk(
             continue
         out[ticker] = df.reset_index(drop=True)
     return out
+
+
+def fetch_hourly_bars_bulk(
+    tickers: list[str],
+    period: str = "60d",
+) -> dict[str, pd.DataFrame]:
+    """Fetch 60-minute OHLCV for all tickers in one yfinance batch call.
+
+    yfinance limits hourly history to ~730 days. Vomy hourly only needs ~10–20
+    bars; default period of "60d" is more than enough.
+
+    Returns {ticker: DataFrame[date, open, high, low, close, volume]}.
+    """
+    if not tickers:
+        return {}
+    raw = yf.download(
+        tickers=tickers,
+        period=period,
+        interval="60m",
+        group_by="column",
+        auto_adjust=False,
+        progress=False,
+        threads=True,
+    )
+    out: dict[str, pd.DataFrame] = {}
+    for ticker in tickers:
+        try:
+            df = pd.DataFrame({
+                "date":   raw.index,
+                "open":   raw[("Open", ticker)].values,
+                "high":   raw[("High", ticker)].values,
+                "low":    raw[("Low", ticker)].values,
+                "close":  raw[("Close", ticker)].values,
+                "volume": raw[("Volume", ticker)].values,
+            })
+        except KeyError:
+            continue
+        df = df.dropna(subset=["close"])
+        if df.empty:
+            continue
+        out[ticker] = df.reset_index(drop=True)
+    return out
