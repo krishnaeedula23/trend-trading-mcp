@@ -1,23 +1,15 @@
 """Tests for Vomy Up Daily scan."""
 from __future__ import annotations
 
-import importlib
-
-from tests.screener._helpers import make_daily_bars
+from tests.screener._helpers import force_register_scan_module, make_daily_bars, scan_fn_by_id
 
 
 def _force_register():
-    from api.indicators.screener.registry import clear_registry
-    import api.indicators.screener.scans.vomy_up_daily as mod
-    clear_registry()
-    importlib.reload(mod)
+    force_register_scan_module("api.indicators.screener.scans.vomy_up_daily")
 
 
 def _scan_fn():
-    from api.indicators.screener.registry import get_scan_by_id
-    desc = get_scan_by_id("vomy_up_daily")
-    assert desc is not None
-    return desc.fn
+    return scan_fn_by_id("vomy_up_daily")
 
 
 def test_vomy_up_daily_self_registers():

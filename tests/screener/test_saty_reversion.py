@@ -1,24 +1,16 @@
 """Tests for Saty Reversion Up/Down scans."""
 from __future__ import annotations
 
-import importlib
-
 from api.indicators.screener.overlay import compute_overlay
-from tests.screener._helpers import make_daily_bars
+from tests.screener._helpers import force_register_scan_module, make_daily_bars, scan_fn_by_id
 
 
 def _force_register():
-    from api.indicators.screener.registry import clear_registry
-    import api.indicators.screener.scans.saty_reversion as mod
-    clear_registry()
-    importlib.reload(mod)
+    force_register_scan_module("api.indicators.screener.scans.saty_reversion")
 
 
 def _scan_fn(scan_id):
-    from api.indicators.screener.registry import get_scan_by_id
-    desc = get_scan_by_id(scan_id)
-    assert desc is not None
-    return desc.fn
+    return scan_fn_by_id(scan_id)
 
 
 def test_saty_reversion_up_and_down_both_register():

@@ -5,7 +5,33 @@ clear the helper repeats across 14+ scan tests.
 """
 from __future__ import annotations
 
+import importlib
+
 import pandas as pd
+
+
+def force_register_scan_module(module_path: str) -> None:
+    """Clear the registry and re-import a scan module so its register_scan(...)
+    side effects fire from a clean state.
+
+    Use this in tests that depend on a specific scan being registered (and no
+    others). Example:
+        force_register_scan_module("api.indicators.screener.scans.saty_reversion")
+    """
+    from api.indicators.screener.registry import clear_registry
+
+    clear_registry()
+    mod = importlib.import_module(module_path)
+    importlib.reload(mod)
+
+
+def scan_fn_by_id(scan_id: str):
+    """Return the scan function registered under `scan_id`. Asserts presence."""
+    from api.indicators.screener.registry import get_scan_by_id
+
+    desc = get_scan_by_id(scan_id)
+    assert desc is not None, f"missing scan {scan_id}"
+    return desc.fn
 
 
 def make_daily_bars(
