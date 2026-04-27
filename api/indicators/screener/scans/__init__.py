@@ -43,3 +43,4 @@ from . import saty_reversion   # noqa: F401
 from . import vomy_down_extension   # noqa: F401
 from . import saty_trigger_down   # noqa: F401
 from . import kell_wedge_pop   # noqa: F401
+from . import kell_flag_base   # noqa: F401
