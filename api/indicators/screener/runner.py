@@ -73,12 +73,25 @@ def run_screener(
             if hit.scan_id == "coiled_spring":
                 coiled_tickers.add(hit.ticker)
 
-    # TODO(plan-2): wire backfill_days_in_compression for newly-detected coiled
-    # tickers so existing coils don't reset to day 1 on first observation.
-    # Requires threading bars_by_ticker + is_coiled_fn into the persistence
-    # call site (or computing the per-ticker initial day count here and
-    # passing as an optional dict to update_coiled_watchlist).
-    update_coiled_watchlist(sb, mode=mode, coiled_tickers=coiled_tickers, today=today)
+    from api.indicators.screener.scans.coiled import is_coiled
+    from api.indicators.screener.persistence import (
+        backfill_days_in_compression, get_active_coiled,
+    )
+    existing_active = {r["ticker"] for r in get_active_coiled(sb, mode)}
+    new_coiled = coiled_tickers - existing_active
+    initial_days = {
+        ticker: backfill_days_in_compression(eligible_bars[ticker], is_coiled)
+        for ticker in new_coiled
+        if ticker in eligible_bars
+    }
+
+    update_coiled_watchlist(
+        sb,
+        mode=mode,
+        coiled_tickers=coiled_tickers,
+        today=today,
+        initial_days_by_ticker=initial_days,
+    )
 
     weights_by_id = {d.scan_id: d.weight for d in descriptors}
     ticker_results: list[TickerResult] = []

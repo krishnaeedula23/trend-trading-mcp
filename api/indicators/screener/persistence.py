@@ -36,60 +36,51 @@ def update_coiled_watchlist(
     mode: Mode,
     coiled_tickers: set[str],
     today: date,
+    initial_days_by_ticker: dict[str, int] | None = None,
 ) -> None:
     """Reconcile active coiled rows with today's coiled set.
 
-    For each ticker in coiled_tickers:
-      - If active row exists: last_seen_at=today, days_in_compression++
-      - Else: insert new row with days_in_compression=1, status='active'
-
-    For each active row whose ticker is NOT in coiled_tickers:
-      - Mark status='broken' (the squeeze broke without firing)
-
-    Uses upsert keyed on (ticker, mode, first_detected_at).
+    initial_days_by_ticker: when a ticker is **newly** detected (no prior row),
+        seed days_in_compression from this dict (the backfilled count) instead
+        of 1. Existing tickers ignore this dict and increment as before.
     """
+    initial = initial_days_by_ticker or {}
     existing = get_active_coiled(sb, mode)
     existing_by_ticker = {r["ticker"]: r for r in existing}
 
     upserts: list[dict] = []
-
     for ticker in coiled_tickers:
         prior = existing_by_ticker.get(ticker)
         if prior:
             upserts.append({
-                "ticker": ticker,
-                "mode": mode,
+                "ticker": ticker, "mode": mode,
                 "first_detected_at": prior["first_detected_at"],
                 "last_seen_at": today.isoformat(),
                 "days_in_compression": int(prior["days_in_compression"]) + 1,
                 "status": "active",
             })
         else:
+            seeded = max(1, int(initial.get(ticker, 1)))
             upserts.append({
-                "ticker": ticker,
-                "mode": mode,
+                "ticker": ticker, "mode": mode,
                 "first_detected_at": today.isoformat(),
                 "last_seen_at": today.isoformat(),
-                "days_in_compression": 1,
+                "days_in_compression": seeded,
                 "status": "active",
             })
-
     for ticker, prior in existing_by_ticker.items():
         if ticker in coiled_tickers:
             continue
         upserts.append({
-            "ticker": ticker,
-            "mode": mode,
+            "ticker": ticker, "mode": mode,
             "first_detected_at": prior["first_detected_at"],
             "last_seen_at": prior["last_seen_at"],
             "days_in_compression": int(prior["days_in_compression"]),
             "status": "broken",
         })
-
     if upserts:
         sb.table("coiled_watchlist").upsert(
-            upserts,
-            on_conflict="ticker,mode,first_detected_at",
+            upserts, on_conflict="ticker,mode,first_detected_at",
         ).execute()
 
 
