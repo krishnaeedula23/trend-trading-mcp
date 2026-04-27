@@ -82,6 +82,7 @@ class TickerResult(BaseModel):
     overlay: IndicatorOverlay
     scans_hit: list[str]
     confluence: int = Field(..., description="Weighted score: sum of scan weights for hits")
+    sector: str = Field("Unknown", description="GICS sector from yfinance, or 'Unknown'")
 
 
 class ScreenerRunResponse(BaseModel):
@@ -96,6 +97,10 @@ class ScreenerRunResponse(BaseModel):
     hit_count: int
     duration_seconds: float
     tickers: list[TickerResult]
+    sector_summary: dict[str, int] = Field(
+        default_factory=dict,
+        description="Sector → number of hit tickers in this run",
+    )
 
 
 class UniverseShowResponse(BaseModel):
