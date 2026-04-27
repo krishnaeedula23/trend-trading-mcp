@@ -32,3 +32,4 @@ from . import saty_trigger_up   # noqa: F401
 from . import saty_golden_gate_up   # noqa: F401
 from . import vomy_up_daily   # noqa: F401
 from . import vomy_up_hourly   # noqa: F401
+from . import ema_crossback   # noqa: F401
