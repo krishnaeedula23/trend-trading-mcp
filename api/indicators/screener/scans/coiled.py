@@ -10,6 +10,8 @@ Lane: breakout. Role: coiled. Weight: 1.
 """
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import talib
 
@@ -17,6 +19,7 @@ from api.indicators.satyland.phase_oscillator import phase_oscillator
 from api.indicators.screener.registry import ScanDescriptor, register_scan
 from api.schemas.screener import IndicatorOverlay, ScanHit
 
+logger = logging.getLogger(__name__)
 
 DONCHIAN_PERIOD = 20
 DONCHIAN_WIDTH_THRESHOLD = 0.08
@@ -54,7 +57,8 @@ def _donchian_width_pct(bars: pd.DataFrame) -> float:
 def _phase_oscillator_value(bars: pd.DataFrame) -> float:
     try:
         return float(phase_oscillator(bars)["oscillator"])
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as exc:
+        logger.debug("phase_oscillator unavailable for coiled gate: %s", exc)
         return float("inf")
 
 
@@ -91,6 +95,7 @@ def coiled_scan(
                 "ttm_squeeze_on": True,
                 "phase_oscillator": _phase_oscillator_value(bars),
                 "close": float(bars["close"].iloc[-1]),
+                "sma_50": float(bars["close"].rolling(50).mean().iloc[-1]),
             },
         ))
     return hits
