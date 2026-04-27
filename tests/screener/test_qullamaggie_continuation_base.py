@@ -24,7 +24,7 @@ def test_continuation_base_fires_when_all_conditions_met():
         low_mult=0.96,   # ADR ~ 8% so adr_pct_20d > 4% ✓
     )
     overlays = {"AAPL": compute_overlay(bars)}
-    hits = qullamaggie_continuation_base_scan({"AAPL": bars}, overlays)
+    hits = qullamaggie_continuation_base_scan({"AAPL": bars}, overlays, {})
     assert len(hits) == 1
     ev = hits[0].evidence
     assert ev["last_5d_volume_ratio"] < 0.5
@@ -39,7 +39,7 @@ def test_continuation_base_rejects_below_5_dollars():
     volumes = [500_000] * 60
     bars = make_daily_bars(closes=closes, volumes=volumes, high_mult=1.04, low_mult=0.96)
     overlays = {"PENNY": compute_overlay(bars)}
-    assert qullamaggie_continuation_base_scan({"PENNY": bars}, overlays) == []
+    assert qullamaggie_continuation_base_scan({"PENNY": bars}, overlays, {}) == []
 
 
 def test_continuation_base_rejects_at_5_dollar_boundary():
@@ -52,7 +52,7 @@ def test_continuation_base_rejects_at_5_dollar_boundary():
     volumes = [500_000] * 55 + [200_000] * 5
     bars = make_daily_bars(closes=closes, volumes=volumes, high_mult=1.04, low_mult=0.96)
     overlays = {"BORD": compute_overlay(bars)}
-    assert qullamaggie_continuation_base_scan({"BORD": bars}, overlays) == []
+    assert qullamaggie_continuation_base_scan({"BORD": bars}, overlays, {}) == []
 
 
 def test_continuation_base_rejects_when_too_far_from_10sma():
@@ -64,7 +64,7 @@ def test_continuation_base_rejects_when_too_far_from_10sma():
     volumes = [500_000] * 55 + [200_000] * 5
     bars = make_daily_bars(closes=closes, volumes=volumes, high_mult=1.04, low_mult=0.96)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert qullamaggie_continuation_base_scan({"AAPL": bars}, overlays) == []
+    assert qullamaggie_continuation_base_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_continuation_base_rejects_when_volume_not_drying():
@@ -78,7 +78,7 @@ def test_continuation_base_rejects_when_volume_not_drying():
     volumes = [500_000] * 60
     bars = make_daily_bars(closes=closes, volumes=volumes, high_mult=1.04, low_mult=0.96)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert qullamaggie_continuation_base_scan({"AAPL": bars}, overlays) == []
+    assert qullamaggie_continuation_base_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_continuation_base_self_registers():

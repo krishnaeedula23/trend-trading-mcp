@@ -45,6 +45,7 @@ def _phase_pair(bars: pd.DataFrame, overlay: IndicatorOverlay) -> tuple[float, f
 def vomy_up_daily_scan(
     bars_by_ticker: dict[str, pd.DataFrame],
     overlays_by_ticker: dict[str, IndicatorOverlay],
+    hourly_bars_by_ticker: dict[str, pd.DataFrame],   # noqa: ARG001
 ) -> list[ScanHit]:
     hits: list[ScanHit] = []
     for ticker, overlay in overlays_by_ticker.items():

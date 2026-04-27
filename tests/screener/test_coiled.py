@@ -93,7 +93,7 @@ def test_coiled_scan_emits_hit_for_compressed_ticker():
     bars = _bars_with_compression()
     bars_by_ticker = {"FAKE": bars}
     overlays_by_ticker = {"FAKE": compute_overlay(bars)}
-    hits = coiled_scan(bars_by_ticker, overlays_by_ticker)
+    hits = coiled_scan(bars_by_ticker, overlays_by_ticker, {})
     assert len(hits) == 1
     assert hits[0].ticker == "FAKE"
     assert hits[0].lane == "breakout"
@@ -106,7 +106,7 @@ def test_coiled_scan_skips_random_ticker():
     bars = _bars_no_compression()
     bars_by_ticker = {"NOISE": bars}
     overlays_by_ticker = {"NOISE": compute_overlay(bars)}
-    hits = coiled_scan(bars_by_ticker, overlays_by_ticker)
+    hits = coiled_scan(bars_by_ticker, overlays_by_ticker, {})
     assert hits == []
 
 

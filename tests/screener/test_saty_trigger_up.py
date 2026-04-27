@@ -31,7 +31,7 @@ def test_saty_trigger_up_day_skips_when_close_below_trigger():
     bars = make_daily_bars(closes=[100.0] * 60)
     overlays = {"AAPL": compute_overlay(bars)}
     fn = _scan_fn("saty_trigger_up_day")
-    assert fn({"AAPL": bars}, overlays) == []
+    assert fn({"AAPL": bars}, overlays, {}) == []
 
 
 def test_saty_trigger_up_day_skips_when_levels_missing():
@@ -40,7 +40,7 @@ def test_saty_trigger_up_day_skips_when_levels_missing():
     bars = make_daily_bars(closes=[100.0] * 60)
     overlay = compute_overlay(bars).model_copy(update={"saty_levels_by_mode": {}})
     fn = _scan_fn("saty_trigger_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_trigger_up_day_fires_when_close_in_band():
@@ -63,7 +63,7 @@ def test_saty_trigger_up_day_fires_when_close_in_band():
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     # close = 100 is above call_trigger (95) and below mid_50_bull (105)
     fn = _scan_fn("saty_trigger_up_day")
-    hits = fn({"NVDA": bars}, {"NVDA": overlay})
+    hits = fn({"NVDA": bars}, {"NVDA": overlay}, {})
     assert len(hits) == 1
     assert hits[0].evidence["call_trigger"] == 95.0
     assert hits[0].evidence["mid_50_bull"] == 105.0
@@ -89,7 +89,7 @@ def test_saty_trigger_up_skips_at_call_trigger_boundary():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_trigger_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_trigger_up_skips_at_mid_50_boundary():
@@ -111,7 +111,7 @@ def test_saty_trigger_up_skips_at_mid_50_boundary():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_trigger_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_trigger_up_three_variants_register():
@@ -147,9 +147,9 @@ def test_saty_trigger_up_multiday_uses_multiday_levels():
     multiday_fn = _scan_fn("saty_trigger_up_multiday")
     day_fn = _scan_fn("saty_trigger_up_day")
     # multiday should fire (close=100 between trigger=95 and mid_50=105)
-    multi_hits = multiday_fn({"AAPL": bars}, {"AAPL": overlay})
+    multi_hits = multiday_fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert len(multi_hits) == 1
     assert multi_hits[0].evidence["mode"] == "multiday"
     # day should NOT fire (no levels for day mode)
-    day_hits = day_fn({"AAPL": bars}, {"AAPL": overlay})
+    day_hits = day_fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert day_hits == []

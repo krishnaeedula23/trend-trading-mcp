@@ -44,6 +44,7 @@ def run_screener(
     bars_by_ticker: dict[str, pd.DataFrame],
     today: date,
     scan_ids: list[str] | None = None,
+    hourly_bars_by_ticker: dict[str, pd.DataFrame] | None = None,
 ) -> ScreenerRunResponse:
     started = time.time()
 
@@ -62,10 +63,11 @@ def run_screener(
 
     hits_by_ticker: dict[str, list[str]] = {t: [] for t in overlays}
 
+    hourly_bars = hourly_bars_by_ticker or {}
     coiled_tickers: set[str] = set()
     for desc in descriptors:
         try:
-            hits = desc.fn(eligible_bars, overlays)
+            hits = desc.fn(eligible_bars, overlays, hourly_bars)
         except Exception:
             logger.exception("scan %s failed; skipping its hits for this run", desc.scan_id)
             continue

@@ -20,7 +20,7 @@ def test_episodic_pivot_fires_on_8pct_up_through_yesterday_high():
     )
     bars["high"] = [101.0] * 59 + [108.5]
     overlays = {"NVDA": compute_overlay(bars)}
-    hits = qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays)
+    hits = qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays, {})
     assert len(hits) == 1
     assert hits[0].evidence["close"] > hits[0].evidence["yesterday_high"]
 
@@ -34,7 +34,7 @@ def test_episodic_pivot_rejects_below_yesterday_high():
     bars = make_daily_bars(closes=closes, volumes=[1_000_000] * 59 + [1_500_000])
     bars["high"] = [120.0] * 59 + [108.5]   # yesterday's high is much higher
     overlays = {"NVDA": compute_overlay(bars)}
-    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays) == []
+    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays, {}) == []
 
 
 def test_episodic_pivot_rejects_low_dollar_volume():
@@ -46,7 +46,7 @@ def test_episodic_pivot_rejects_low_dollar_volume():
     bars = make_daily_bars(closes=closes, volumes=[50_000] * 60)
     bars["high"] = [101.0] * 59 + [108.5]
     overlays = {"NVDA": compute_overlay(bars)}
-    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays) == []
+    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays, {}) == []
 
 
 def test_episodic_pivot_rejects_at_dollar_volume_boundary():
@@ -60,7 +60,7 @@ def test_episodic_pivot_rejects_at_dollar_volume_boundary():
     bars = make_daily_bars(closes=closes, volumes=volumes)
     bars["high"] = [99.0] * 59 + [99.5]   # yesterday_high (99) < close (100), passes
     overlays = {"NVDA": compute_overlay(bars)}
-    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays) == []
+    assert qullamaggie_episodic_pivot_scan({"NVDA": bars}, overlays, {}) == []
 
 
 def test_episodic_pivot_self_registers():

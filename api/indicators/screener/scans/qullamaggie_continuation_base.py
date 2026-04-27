@@ -57,6 +57,7 @@ def _check(bars: pd.DataFrame, overlay: IndicatorOverlay) -> dict | None:
 def qullamaggie_continuation_base_scan(
     bars_by_ticker: dict[str, pd.DataFrame],
     overlays_by_ticker: dict[str, IndicatorOverlay],
+    hourly_bars_by_ticker: dict[str, pd.DataFrame],   # noqa: ARG001
 ) -> list[ScanHit]:
     hits: list[ScanHit] = []
     for ticker, overlay in overlays_by_ticker.items():

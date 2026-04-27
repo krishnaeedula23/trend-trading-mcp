@@ -15,7 +15,11 @@ from api.schemas.screener import IndicatorOverlay, Lane, Mode, Role, ScanHit
 
 
 ScanFn = Callable[
-    [dict[str, pd.DataFrame], dict[str, IndicatorOverlay]],
+    [
+        dict[str, pd.DataFrame],   # daily bars
+        dict[str, IndicatorOverlay],
+        dict[str, pd.DataFrame],   # hourly bars (may be empty)
+    ],
     list[ScanHit],
 ]
 

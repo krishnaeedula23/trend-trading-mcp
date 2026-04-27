@@ -43,7 +43,7 @@ def test_vomy_up_daily_skips_when_bias_candle_not_blue():
         import pytest
         pytest.skip("synthetic bars produced 'blue' bias; this fixture targets the non-blue path")
     fn = _scan_fn()
-    assert fn({"NVDA": bars}, overlays) == []
+    assert fn({"NVDA": bars}, overlays, {}) == []
 
 
 def test_vomy_up_daily_skips_when_below_48ema():
@@ -58,7 +58,7 @@ def test_vomy_up_daily_skips_when_below_48ema():
         "ribbon_state": "bullish",
     })
     fn = _scan_fn()
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_vomy_up_daily_skips_when_ribbon_state_bearish():
@@ -73,7 +73,7 @@ def test_vomy_up_daily_skips_when_ribbon_state_bearish():
         "ribbon_state": "bearish",   # disqualifier
     })
     fn = _scan_fn()
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_vomy_up_daily_fires_when_all_conditions_pass():
@@ -92,7 +92,7 @@ def test_vomy_up_daily_fires_when_all_conditions_pass():
         "ribbon_state": "bullish",
     })
     fn = _scan_fn()
-    hits = fn({"NVDA": bars}, {"NVDA": overlay})
+    hits = fn({"NVDA": bars}, {"NVDA": overlay}, {})
     if not hits:
         # If the synthetic doesn't produce phase_today > phase_prior, skip — the
         # categorical-gate coverage is in other tests.
@@ -123,5 +123,5 @@ def test_vomy_up_daily_handles_short_history_gracefully():
     bars = make_daily_bars(closes=closes)
     overlays = {"AAPL": compute_overlay(bars)}
     fn = _scan_fn()
-    out = fn({"AAPL": bars}, overlays)
+    out = fn({"AAPL": bars}, overlays, {})
     assert isinstance(out, list)

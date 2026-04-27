@@ -59,9 +59,10 @@ def test_run_morning_endpoint_calls_runner(client):
     )
     with patch("api.endpoints.screener_morning._resolve_active_universe", return_value=["NVDA"]):
         with patch("api.endpoints.screener_morning.fetch_daily_bars_bulk", return_value={"NVDA": MagicMock()}):
-            with patch("api.endpoints.screener_morning.run_screener", return_value=fake_response):
-                with patch("api.endpoints.screener_morning._get_supabase", return_value=MagicMock()):
-                    res = client.post("/api/screener/morning/run", json={"mode": "swing"}, headers=AUTH_HEADERS)
+            with patch("api.endpoints.screener_morning.fetch_hourly_bars_bulk", return_value={}):
+                with patch("api.endpoints.screener_morning.run_screener", return_value=fake_response):
+                    with patch("api.endpoints.screener_morning._get_supabase", return_value=MagicMock()):
+                        res = client.post("/api/screener/morning/run", json={"mode": "swing"}, headers=AUTH_HEADERS)
     assert res.status_code == 200
     body = res.json()
     assert body["mode"] == "swing"

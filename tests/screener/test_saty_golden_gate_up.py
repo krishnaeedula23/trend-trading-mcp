@@ -26,7 +26,7 @@ def test_saty_gg_up_skips_when_levels_missing():
     bars = make_daily_bars(closes=[100.0] * 60)
     overlay = compute_overlay(bars).model_copy(update={"saty_levels_by_mode": {}})
     fn = _scan_fn("saty_golden_gate_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_gg_up_fires_when_close_in_band():
@@ -50,7 +50,7 @@ def test_saty_gg_up_fires_when_close_in_band():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_golden_gate_up_day")
-    hits = fn({"AAPL": bars}, {"AAPL": overlay})
+    hits = fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert len(hits) == 1
     ev = hits[0].evidence
     assert ev["golden_gate"] == 99.0
@@ -77,7 +77,7 @@ def test_saty_gg_up_fires_at_golden_gate_lower_boundary():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_golden_gate_up_day")
-    hits = fn({"AAPL": bars}, {"AAPL": overlay})
+    hits = fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert len(hits) == 1, "Equality on golden_gate_bull should fire (inclusive lower bound)"
 
 
@@ -100,7 +100,7 @@ def test_saty_gg_up_skips_at_fib_786_upper_boundary():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_golden_gate_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_gg_up_skips_when_close_below_golden_gate():
@@ -122,7 +122,7 @@ def test_saty_gg_up_skips_when_close_below_golden_gate():
     }
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     fn = _scan_fn("saty_golden_gate_up_day")
-    assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+    assert fn({"AAPL": bars}, {"AAPL": overlay}, {}) == []
 
 
 def test_saty_gg_up_three_variants_register():
@@ -157,8 +157,8 @@ def test_saty_gg_up_swing_uses_swing_levels():
     overlay = overlay.model_copy(update={"saty_levels_by_mode": custom_levels})
     swing_fn = _scan_fn("saty_golden_gate_up_swing")
     day_fn = _scan_fn("saty_golden_gate_up_day")
-    swing_hits = swing_fn({"AAPL": bars}, {"AAPL": overlay})
+    swing_hits = swing_fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert len(swing_hits) == 1
     assert swing_hits[0].evidence["mode"] == "swing"
-    day_hits = day_fn({"AAPL": bars}, {"AAPL": overlay})
+    day_hits = day_fn({"AAPL": bars}, {"AAPL": overlay}, {})
     assert day_hits == []

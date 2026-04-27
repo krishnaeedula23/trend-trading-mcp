@@ -14,7 +14,7 @@ def test_pradeep_4pct_fires_on_5pct_up_with_volume_increase():
     volumes = [1_000_000] * 59 + [2_000_000]
     bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
-    hits = pradeep_4pct_scan({"AAPL": bars}, overlays)
+    hits = pradeep_4pct_scan({"AAPL": bars}, overlays, {})
     assert len(hits) == 1
     assert hits[0].scan_id == "pradeep_4pct_breakout"
     assert hits[0].lane == "breakout"
@@ -29,7 +29,7 @@ def test_pradeep_4pct_rejects_3pct_up():
     volumes = [1_000_000] * 60
     bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
+    assert pradeep_4pct_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_pradeep_4pct_rejects_when_volume_decreasing():
@@ -40,7 +40,7 @@ def test_pradeep_4pct_rejects_when_volume_decreasing():
     volumes = [1_000_000] * 59 + [800_000]
     bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
+    assert pradeep_4pct_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_pradeep_4pct_rejects_when_volume_below_100k():
@@ -51,7 +51,7 @@ def test_pradeep_4pct_rejects_when_volume_below_100k():
     volumes = [50_000] * 59 + [80_000]
     bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
+    assert pradeep_4pct_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_pradeep_4pct_rejects_at_volume_boundary():
@@ -63,7 +63,7 @@ def test_pradeep_4pct_rejects_at_volume_boundary():
     volumes = [99_000] * 59 + [100_000]   # today equals threshold
     bars = make_daily_bars(closes, volumes)
     overlays = {"AAPL": compute_overlay(bars)}
-    assert pradeep_4pct_scan({"AAPL": bars}, overlays) == []
+    assert pradeep_4pct_scan({"AAPL": bars}, overlays, {}) == []
 
 
 def test_pradeep_4pct_self_registers():
