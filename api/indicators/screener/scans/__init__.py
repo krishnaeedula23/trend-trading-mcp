@@ -34,3 +34,4 @@ from . import vomy_up_daily   # noqa: F401
 from . import vomy_up_hourly   # noqa: F401
 from . import ema_crossback   # noqa: F401
 from . import saty_reversion   # noqa: F401
+from . import vomy_down_extension   # noqa: F401
