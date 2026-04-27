@@ -185,7 +185,6 @@ def test_runner_returns_weighted_confluence(mock_supabase):
     )
     aapl = next(t for t in response.tickers if t.ticker == "AAPL")
     assert aapl.confluence == 4
-    assert aapl.confluence_weight == 4
     assert sorted(aapl.scans_hit) == ["heavy", "light"]
     clear_registry()
 

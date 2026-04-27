@@ -760,7 +760,6 @@ def test_runner_returns_weighted_confluence(mock_supabase):
     )
     aapl = next(t for t in response.tickers if t.ticker == "AAPL")
     assert aapl.confluence == 4
-    assert aapl.confluence_weight == 4
     assert sorted(aapl.scans_hit) == ["heavy", "light"]
     clear_registry()
 ```
@@ -785,7 +784,7 @@ class ScanDescriptor:
     weight: int = 1
 ```
 
-- [ ] **Step 4.4: Add `confluence_weight` to `TickerResult` in `api/schemas/screener.py`**
+- [ ] **Step 4.4: Add `confluence` weighted score to `TickerResult` in `api/schemas/screener.py`**
 
 Replace the existing class:
 
@@ -796,7 +795,6 @@ class TickerResult(BaseModel):
     overlay: IndicatorOverlay
     scans_hit: list[str]
     confluence: int = Field(..., description="Weighted score: sum of scan weights for hits")
-    confluence_weight: int = Field(..., description="Same value as confluence; explicit name when raw count also surfaced")
 ```
 
 - [ ] **Step 4.5: Update runner to compute weighted confluence**
@@ -816,7 +814,6 @@ In `api/indicators/screener/runner.py`, replace the `ticker_results` loop with:
             overlay=overlays[ticker],
             scans_hit=scans,
             confluence=weighted,
-            confluence_weight=weighted,
         ))
 ```
 
@@ -4035,7 +4032,6 @@ class TickerResult(BaseModel):
     overlay: IndicatorOverlay
     scans_hit: list[str]
     confluence: int
-    confluence_weight: int
     sector: str = Field("Unknown", description="GICS sector from yfinance, or 'Unknown'")
 
 
@@ -4533,7 +4529,7 @@ EOF
 - `ScanFn` signature: `(daily_bars, overlays, hourly_bars) → list[ScanHit]` — confirmed identical across registry, runner, and every scan in Tasks 8–21.
 - `ScanDescriptor.weight: int = 1` — added in Task 4, used in every later task with the value documented in the weighting table at the top of the plan.
 - `IndicatorOverlay` field names — `phase_oscillator` (float), `phase_in_compression` (bool), `ribbon_state` (Literal), `bias_candle` (Literal), `above_48ema` (bool), `saty_levels_by_mode` (dict). Names used identically in Tasks 1, 2, 11, 12, 13, 15, 16, 17, 18.
-- `TickerResult.confluence` and `TickerResult.confluence_weight` — both added in Task 4; Task 22 extends with `sector`.
+- `TickerResult.confluence` — weighted score added in Task 4; Task 22 extends with `sector`.
 - `update_coiled_watchlist` extra parameter `initial_days_by_ticker` — defined in Task 5; runner call site updated in same task.
 - Phase Oscillator constants `PHASE_OSCILLATOR_LOWER = -20.0` and `PHASE_OSCILLATOR_UPPER = 20.0` — defined in Task 3, asserted in Task 3's tests.
 - Saty Levels dict shape — `levels_dict["call_trigger"]`, `levels_dict["put_trigger"]`, `levels_dict["levels"]["golden_gate_bull"]["price"]`, `levels_dict["levels"]["fib_786_bull"]["price"]`, `levels_dict["levels"]["mid_50_bull"]["price"]`, `levels_dict["levels"]["mid_50_bear"]["price"]` — verified against `api/indicators/satyland/atr_levels.py` (the ground-truth Pine port). Used identically in Tasks 11, 12, 18.

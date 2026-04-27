@@ -92,7 +92,6 @@ def run_screener(
             overlay=overlays[ticker],
             scans_hit=scans,
             confluence=weighted,
-            confluence_weight=weighted,
         ))
 
     duration = time.time() - started
