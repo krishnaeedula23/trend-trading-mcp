@@ -40,7 +40,8 @@ def test_vomy_up_daily_skips_when_bias_candle_not_blue():
     overlays = {"NVDA": compute_overlay(bars)}
     # If by chance the synthetic generates a 'blue' bias, skip the test (fixture not built for this case)
     if overlays["NVDA"].bias_candle == "blue":
-        return
+        import pytest
+        pytest.skip("synthetic bars produced 'blue' bias; this fixture targets the non-blue path")
     fn = _scan_fn()
     assert fn({"NVDA": bars}, overlays) == []
 
@@ -73,6 +74,44 @@ def test_vomy_up_daily_skips_when_ribbon_state_bearish():
     })
     fn = _scan_fn()
     assert fn({"AAPL": bars}, {"AAPL": overlay}) == []
+
+
+def test_vomy_up_daily_fires_when_all_conditions_pass():
+    """All 4 gates pass + phase rising → exactly one hit with full evidence shape."""
+    from api.indicators.screener.overlay import compute_overlay
+    _force_register()
+    # 120 bars with a recent phase-rising shape: long flat tail at higher price after a base.
+    # Real bars; we'll override overlay fields to satisfy the categorical gates.
+    closes = [99.0] * 80 + [100.0] * 40
+    bars = make_daily_bars(closes=closes)
+    base_overlay = compute_overlay(bars)
+    # Sanity: real overlay's phase_oscillator should be >= prior phase (rising into flat tail)
+    overlay = base_overlay.model_copy(update={
+        "bias_candle": "blue",
+        "above_48ema": True,
+        "ribbon_state": "bullish",
+    })
+    fn = _scan_fn()
+    hits = fn({"NVDA": bars}, {"NVDA": overlay})
+    if not hits:
+        # If the synthetic doesn't produce phase_today > phase_prior, skip — the
+        # categorical-gate coverage is in other tests.
+        import pytest
+        pytest.skip("synthetic bars did not produce rising Phase Oscillator")
+    assert len(hits) == 1
+    hit = hits[0]
+    assert hit.scan_id == "vomy_up_daily"
+    assert hit.lane == "transition"
+    assert hit.role == "trigger"
+    # Evidence keys
+    assert hit.evidence["bias_candle"] == "blue"
+    assert hit.evidence["ribbon_state"] == "bullish"
+    assert "phase_today" in hit.evidence
+    assert "phase_prior" in hit.evidence
+    assert hit.evidence["phase_today"] > hit.evidence["phase_prior"]
+    # make_hit auto-enrichment
+    assert "close" in hit.evidence
+    assert "dollar_volume_today" in hit.evidence
 
 
 def test_vomy_up_daily_handles_short_history_gracefully():

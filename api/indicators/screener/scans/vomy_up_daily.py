@@ -26,17 +26,20 @@ from api.schemas.screener import IndicatorOverlay, ScanHit
 logger = logging.getLogger(__name__)
 
 
-def _phase_pair(bars: pd.DataFrame) -> tuple[float, float] | None:
-    """Return (prior, today) Phase Oscillator values, or None if uncomputable."""
+def _phase_pair(bars: pd.DataFrame, overlay: IndicatorOverlay) -> tuple[float, float] | None:
+    """Return (prior, today) Phase Oscillator values, or None if uncomputable.
+
+    Uses the overlay's cached `phase_oscillator` for today, computing only
+    yesterday's value via `phase_oscillator(bars.iloc[:-1])`.
+    """
     if len(bars) < 23:
         return None
     try:
-        today = float(phase_oscillator(bars)["oscillator"])
         prior = float(phase_oscillator(bars.iloc[:-1])["oscillator"])
     except (ValueError, KeyError) as exc:
-        logger.debug("phase_oscillator unavailable for vomy_up_daily: %s", exc)
+        logger.debug("phase_oscillator unavailable for vomy_up_daily prior bar: %s", exc)
         return None
-    return prior, today
+    return prior, overlay.phase_oscillator
 
 
 def vomy_up_daily_scan(
@@ -52,7 +55,7 @@ def vomy_up_daily_scan(
         if overlay.ribbon_state not in ("chopzilla", "bullish"):
             continue
         bars = bars_by_ticker[ticker]
-        pair = _phase_pair(bars)
+        pair = _phase_pair(bars, overlay)
         if pair is None:
             continue
         prior, today = pair
