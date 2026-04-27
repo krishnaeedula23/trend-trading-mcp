@@ -55,6 +55,7 @@ def test_run_morning_endpoint_calls_runner(client):
             overlay=IndicatorOverlay(atr_pct=0.03, pct_from_50ma=0.05, extension=1.67, sma_50=857.0, atr_14=27.0),
             scans_hit=["coiled_spring"],
             confluence=1,
+            confluence_weight=1,
         )],
     )
     with patch("api.endpoints.screener_morning._resolve_active_universe", return_value=["NVDA"]):

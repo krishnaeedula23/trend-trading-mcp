@@ -81,7 +81,8 @@ class TickerResult(BaseModel):
     last_close: float
     overlay: IndicatorOverlay
     scans_hit: list[str]
-    confluence: int
+    confluence: int = Field(..., description="Weighted score: sum of scan weights for hits")
+    confluence_weight: int = Field(..., description="Same value as confluence; explicit name when raw count also surfaced")
 
 
 class ScreenerRunResponse(BaseModel):

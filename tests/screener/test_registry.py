@@ -50,3 +50,15 @@ def test_register_duplicate_raises():
     register_scan(ScanDescriptor("dup", "breakout", "trigger", "swing", fn))
     with pytest.raises(ValueError, match="already registered"):
         register_scan(ScanDescriptor("dup", "breakout", "trigger", "swing", fn))
+
+
+def test_scan_descriptor_default_weight_is_one():
+    from api.indicators.screener.registry import ScanDescriptor
+    d = ScanDescriptor("x", "breakout", "trigger", "swing", lambda b, o: [])
+    assert d.weight == 1
+
+
+def test_scan_descriptor_accepts_explicit_weight():
+    from api.indicators.screener.registry import ScanDescriptor
+    d = ScanDescriptor("x", "breakout", "trigger", "swing", lambda b, o: [], weight=3)
+    assert d.weight == 3

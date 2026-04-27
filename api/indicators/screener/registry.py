@@ -27,6 +27,7 @@ class ScanDescriptor:
     role: Role
     mode: Mode
     fn: ScanFn
+    weight: int = 1
 
 
 _REGISTRY: dict[str, ScanDescriptor] = {}

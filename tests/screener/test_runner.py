@@ -146,6 +146,50 @@ def test_runner_filters_by_scan_ids(mock_supabase):
     assert aapl.scans_hit == ["a"]
 
 
+def test_runner_returns_weighted_confluence(mock_supabase):
+    """Confluence score = sum of scan weights, not raw count."""
+    from datetime import date
+    from unittest.mock import MagicMock
+    from api.indicators.screener.registry import ScanDescriptor, register_scan, clear_registry
+    from api.indicators.screener.runner import run_screener
+    from api.schemas.screener import ScanHit
+
+    clear_registry()
+
+    def scan_heavy(bars_by, _o):
+        return [ScanHit(ticker=t, scan_id="heavy", lane="breakout", role="trigger") for t in bars_by]
+
+    def scan_light(bars_by, _o):
+        return [ScanHit(ticker=t, scan_id="light", lane="breakout", role="trigger") for t in bars_by]
+
+    register_scan(ScanDescriptor("heavy", "breakout", "trigger", "swing", scan_heavy, weight=3))
+    register_scan(ScanDescriptor("light", "breakout", "trigger", "swing", scan_light, weight=1))
+
+    def _make_chain(rows=None):
+        c = MagicMock()
+        c.insert.return_value = c
+        c.select.return_value = c
+        c.eq.return_value = c
+        c.upsert.return_value = c
+        c.execute.return_value = MagicMock(data=rows if rows is not None else [])
+        return c
+
+    runs_chain = _make_chain([{"id": "run-w"}])
+    coiled_chain = _make_chain([])
+    mock_supabase.table.side_effect = lambda name: runs_chain if name == "screener_runs" else coiled_chain
+
+    response = run_screener(
+        sb=mock_supabase, mode="swing",
+        bars_by_ticker={"AAPL": _bars([100.0] * 60)},
+        today=date(2026, 4, 25),
+    )
+    aapl = next(t for t in response.tickers if t.ticker == "AAPL")
+    assert aapl.confluence == 4
+    assert aapl.confluence_weight == 4
+    assert sorted(aapl.scans_hit) == ["heavy", "light"]
+    clear_registry()
+
+
 def test_runner_picks_up_scans_via_package_import():
     """Regression test for prior bug: the scans PACKAGE __init__ must trigger
     self-registration of every scan, because that's the production import path.

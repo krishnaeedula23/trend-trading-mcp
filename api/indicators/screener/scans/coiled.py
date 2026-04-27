@@ -103,5 +103,5 @@ def coiled_scan(
 
 register_scan(ScanDescriptor(
     scan_id="coiled_spring", lane="breakout", role="coiled",
-    mode="swing", fn=coiled_scan,
+    mode="swing", fn=coiled_scan, weight=1,
 ))

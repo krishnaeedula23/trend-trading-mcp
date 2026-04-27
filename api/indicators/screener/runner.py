@@ -80,16 +80,19 @@ def run_screener(
     # passing as an optional dict to update_coiled_watchlist).
     update_coiled_watchlist(sb, mode=mode, coiled_tickers=coiled_tickers, today=today)
 
+    weights_by_id = {d.scan_id: d.weight for d in descriptors}
     ticker_results: list[TickerResult] = []
     for ticker, scans in hits_by_ticker.items():
         if not scans:
             continue
+        weighted = sum(weights_by_id.get(s, 1) for s in scans)
         ticker_results.append(TickerResult(
             ticker=ticker,
             last_close=float(eligible_bars[ticker]["close"].iloc[-1]),
             overlay=overlays[ticker],
             scans_hit=scans,
-            confluence=len(scans),
+            confluence=weighted,
+            confluence_weight=weighted,
         ))
 
     duration = time.time() - started
