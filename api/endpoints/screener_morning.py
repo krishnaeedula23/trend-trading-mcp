@@ -45,8 +45,12 @@ router = APIRouter(prefix="/api/screener", tags=["screener"])
 
 
 def _get_supabase() -> Client:
+    # Accept both env var names: Railway uses SUPABASE_SERVICE_ROLE_KEY (matching
+    # every other endpoint in the repo); local dev historically used
+    # SUPABASE_SERVICE_KEY. Without this, the screener endpoint 500s on Railway
+    # while every swing endpoint works — see api/integrations/supabase_client.py.
     url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_SERVICE_KEY"]
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
 
 
